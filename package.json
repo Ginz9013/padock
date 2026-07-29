@@ -1,0 +1,26 @@
+{
+  "name": "padock",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "build": "dotenv -e .env -- turbo run build",
+    "dev": "dotenv -e .env -- turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "dotenv -e .env -- pnpm --filter @padock/db generate",
+    "db:push": "dotenv -e .env -- pnpm --filter @padock/db push",
+    "db:studio": "dotenv -e .env -- pnpm --filter @padock/db studio",
+    "auth:generate": "dotenv -e .env -- pnpm --filter @padock/auth exec auth generate --config ./src/index.ts --output ../db/prisma/schema.prisma -y",
+    "docker:up": "docker compose --env-file .env -f docker/docker-compose.yml up --build",
+    "docker:down": "docker compose --env-file .env -f docker/docker-compose.yml down",
+    "docker:logs": "docker compose --env-file .env -f docker/docker-compose.yml logs -f"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^8.0.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.0"
+  }
+}

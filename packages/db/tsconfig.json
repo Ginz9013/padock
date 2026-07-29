@@ -1,0 +1,7 @@
+{
+  "extends": "@padock/config/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "."
+  },
+  "include": ["src", "generated", "prisma.config.ts"]
+}

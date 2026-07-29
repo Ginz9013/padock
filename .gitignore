@@ -1,0 +1,18 @@
+node_modules/
+.turbo/
+.claude/
+dist/
+.next/
+build/
+.env
+.env.*
+!.env.example
+# Next.js only auto-loads its own directory's .env; this is a tracked
+# symlink to the root .env (single source of truth), not a real file.
+!apps/web/.env
+*.log
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+apps/web/.next/
+packages/db/generated/
