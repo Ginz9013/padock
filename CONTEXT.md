@@ -64,6 +64,8 @@ Three native subsystems, one shared platform, one integration layer that reaches
    (subscription-tier agents — no API-token billing needed)
 ```
 
+For agents with MCP support, `padock mcp serve` (§5.3, Phase 5) is an alternate path alongside the Skill — same CLI, same auth, just structured tool calls instead of shell-parsed stdout.
+
 ### 5.1 Padock Workspace (the product)
 
 Self-built, not third-party integrations:
@@ -186,7 +188,8 @@ The CLI is the single implementation of "how to talk to Padock." Everything abov
   - `~/.claude/skills/padock/` — **Claude Code**'s own convention; not confirmed to alias `.agents/skills/`, so it gets its own copy
   - Three file writes of one identical source, not three different packages.
 - **Distribution (v1)**: ships as part of the `padock` CLI package, not a separate marketplace/registry. `padock init-skill` writes the version-matched `SKILL.md` to the paths above. Keeps the Skill in lockstep with the CLI's command grammar automatically; avoids a second release/review pipeline before the project has external users. Publishing to agentskills.io or an official marketplace is a later distribution optimization, not a v1 requirement.
-- **Still genuinely deferred** (real work, not just "adapter glue" — moved to Phase 5): an MCP server wrapper (`padock mcp serve`) for agents that prefer structured tool calls over shell-parsing a CLI's stdout. Not required for cross-agent reach anymore — the Skill format already solves discovery/instruction portability — so this is purely an optional richer transport, not a compatibility requirement.
+- **MCP server wrapper — done (Phase 5)**: `padock mcp serve` starts an MCP server (stdio transport, verified against the real `@modelcontextprotocol/sdk` v1.30.0) exposing the full command grammar as ~20 tools, one per CLI subcommand (`project_create`, `task_update`, `chat_send`, `search`, ...) plus `whoami`. Not a second implementation — every tool calls the same `actions/*.ts` functions the CLI commands themselves call (extracted specifically so there'd be exactly one implementation, not a CLI copy and an MCP copy); reuses the same `~/.config/padock/` login, no separate auth. `login`/`init-skill` are deliberately **not** tools — they're one-time human setup steps, not part of the day-to-day grammar an agent drives. Not required for cross-agent reach (the Skill format already solved that, above) — this is purely an optional richer transport for MCP-capable clients that would otherwise have to shell-parse the CLI's stdout.
+- **Still open**: publishing the Skill to agentskills.io or an official marketplace — a real external/public action requiring a human decision on timing, not engineering work, so it stays unscheduled rather than being treated as "not started yet."
 
 ## 6. Confirmed decisions
 
@@ -246,7 +249,7 @@ Build a thin walking skeleton across all three domains first, validate the flow 
 3. **Phase 2 — Padock CLI**: implement the command grammar in §5.2 (incl. `padock login` manual-token flow, `tsvector` search) against the Phase 1 API.
 4. **Phase 3 — Universal Agent Skill**: one portable `SKILL.md` (§5.3, the open Agent Skills standard — no per-agent adapters needed), `padock init-skill` distributing it to Claude Code/Codex CLI/Gemini CLI's discovery paths in one shot; dogfeed the §8 scenario end-to-end with a real subscription agent (Claude Code, since that's the maintainer's daily driver — §6 first validation target), but the artifact itself isn't Claude-specific.
 5. **Phase 4 — Deepen each domain** — **done**: channels/threads for chat (§5.1.4), configurable workflows for tasks (§5.1.5), block-based doc storage (§5.1.7), plus the switch to `prisma migrate` (§5.1.6) that came out of doing this with live dogfood data. Sequenced one slice at a time rather than simultaneously, per this session's choice.
-6. **Phase 5 — Optional richer transport & marketplace distribution**: MCP server wrapper (`padock mcp serve`) for agents that prefer structured tool calls over shell-parsing the CLI, publishing to agentskills.io/an official marketplace. Not cross-agent compatibility work anymore — Phase 3 already covers that — purely later-stage nice-to-haves.
+6. **Phase 5 — Optional richer transport & marketplace distribution**: MCP server wrapper (`padock mcp serve`) — **done**, §5.3. Publishing to agentskills.io/an official marketplace is still open — a human/business decision, not engineering work.
 7. **Phase 6 — Non-interactive agents & fine-grained permissions**: server-side approval queue for confirm-before-act, granular PAT scopes — only once unattended/scheduled agents are actually in scope (§7).
 
 ## 10. Non-goals (v1)

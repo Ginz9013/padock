@@ -1,7 +1,7 @@
 ---
 name: padock
 description: Use when the user wants to work with a Padock workspace — find or search project info (docs/tasks/chat), create or update tasks, read or write docs, or message a colleague. Triggers on requests like "find X in project Y", "what's the status of...", "mark this task as done/review", "send this to <colleague>".
-version: 0.3.0
+version: 0.4.0
 ---
 
 # Padock
@@ -64,6 +64,15 @@ and projects can define their own on top with `task-state create`. If
 `padock task update <id> --status=X` fails because `X` doesn't exist,
 run `padock task-state list --project=<name>` to see what's actually
 available in that task's project.
+
+## MCP alternative
+
+If your runtime speaks MCP, `padock mcp serve` starts an MCP server
+(stdio) exposing this same command grammar as tools (`project_list`,
+`task_update`, `chat_send`, `search`, etc. — one tool per command
+above). It reuses the same `padock login` config, so no separate setup.
+Prefer it over shelling out to `padock` when MCP tool calls are
+available; the shell commands above still work everywhere else.
 
 ## Before sending a message or changing a task's status
 
