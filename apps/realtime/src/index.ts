@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { WebSocketServer } from "ws";
+import { WebSocketServer, type WebSocket } from "ws";
 import { Redis } from "ioredis";
 import { resolveIdentity } from "@padock/auth";
 
@@ -31,6 +31,14 @@ const httpServer = createServer((_req, res) => {
 
 const wss = new WebSocketServer({ noServer: true });
 
+// No per-channel/per-DM subscription filtering in v1 (§6/§7's "no
+// granular permissions yet" stance, extended to the push layer in
+// Phase 4): every connected, authenticated client gets every event.
+// A client's actual *read* scope is enforced at the query layer
+// (chat.history/conversation/search), not here — this is just a
+// "something changed, go re-fetch" signal.
+const connections = new Set<WebSocket>();
+
 httpServer.on("upgrade", (req, socket, head) => {
   void (async () => {
     const headers = headersFromUpgradeRequest(req.headers);
@@ -43,16 +51,18 @@ httpServer.on("upgrade", (req, socket, head) => {
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       console.log(`[realtime] connected: user=${user.id}`);
+      connections.add(ws);
       ws.on("close", () => {
+        connections.delete(ws);
         console.log(`[realtime] disconnected: user=${user.id}`);
       });
     });
   })();
 });
 
-// Redis pub/sub — the extraction seam from CONTEXT.md §5.1: Phase 1
-// chat events get published here by the app process and fanned out to
-// connected websockets. No chat logic yet, just proving the wiring.
+// Redis pub/sub — the extraction seam from CONTEXT.md §5.1. Phase 4
+// gives it a real payload: packages/api's chat.send publishes here,
+// and every event gets broadcast to all connected sockets below.
 const redis = new Redis(REDIS_URL);
 const PADOCK_EVENTS_CHANNEL = "padock:events";
 
@@ -66,6 +76,11 @@ redis.subscribe(PADOCK_EVENTS_CHANNEL, (err) => {
 
 redis.on("message", (channel, message) => {
   console.log(`[realtime] redis message on ${channel}:`, message);
+  for (const ws of connections) {
+    if (ws.readyState === ws.OPEN) {
+      ws.send(message);
+    }
+  }
 });
 
 httpServer.listen(PORT, () => {
