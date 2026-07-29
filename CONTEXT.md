@@ -77,7 +77,7 @@ This is explicitly **not** domain microservices (no separate chat-service/task-s
 
 ### 5.1.1 Tech stack: T3 + Turborepo
 
-Core stack is the **T3 stack** (Next.js, tRPC, Tailwind, Auth.js, Prisma or Drizzle) inside a **create-t3-turbo-style Turborepo**:
+Core stack is the **T3 stack** (Next.js, tRPC, Tailwind, Better Auth, Prisma) inside a **create-t3-turbo-style Turborepo**:
 
 ```
 apps/
@@ -97,9 +97,12 @@ Key property: the CLI imports the tRPC client and gets **end-to-end type safety*
 **How the CLI consumes tRPC** (tRPC is plain HTTP underneath; `@trpc/client` runs in any Node process):
 
 - CLI uses `createTRPCClient<AppRouter>` + `httpBatchLink` pointed at the self-hosted instance's `/api/trpc`; `import type { AppRouter }` is type-only — no server code in the CLI bundle.
-- **Dual-track auth**: browser sessions use Auth.js cookies; the CLI uses **Personal Access Tokens** (`padock login` → token stored in `~/.config/padock/`, sent as `Authorization: Bearer`). tRPC's `createContext` resolves identity from either source into the same context shape.
-- **v1 login flow**: manual token copy — user generates a PAT from the web UI's settings page, pastes it into `padock login --token=<pat>`. No device-code flow in v1 (that's an OAuth Device Authorization Grant implementation cost not justified before there's a multi-user, non-technical audience actually hitting friction here).
-- **v1 PAT scope: none — a PAT grants the full permissions of the user who created it.** No separate agent-scope system. This is deliberate, not an oversight: v1 only supports interactive agents (§4/§7) where a human is already in the loop approving risky actions before they happen, so a second permission layer on top would be solving a problem (unattended/non-interactive agents, multi-agent least-privilege) that doesn't exist yet. Revisit when non-interactive/scheduled agents are in scope (§7).
+- **Auth: Better Auth**, not Auth.js (NextAuth) — Auth.js entered maintenance-only mode in early 2026 when Better Auth absorbed the project (security patches only, no new features); Better Auth itself was acquired by Vercel in July 2026 and is under active development, including an "Agent Auth" protocol for AI agent identity — directly adjacent to this project's own agent-attribution needs (§4). Better Auth is also framework-agnostic, which matters because `realtime`/`worker` are plain Node processes, not Next.js apps, and need to validate the same identity without a Next.js request context. A shared `packages/auth` instance (Prisma adapter) is mounted by `apps/web` and imported directly by `apps/realtime`/`apps/worker`.
+- **Dual-track auth**: browser sessions use Better Auth's session cookies; the CLI uses Better Auth's official **API Key plugin** as its Personal Access Token (PAT) mechanism (`padock login` → key stored in `~/.config/padock/`, sent as `Authorization: Bearer`). This replaces a hand-rolled PAT table/middleware — Better Auth's session resolution already handles both cookie and bearer-token identity into one context shape, and the API Key plugin supports per-key scoping if/when granular agent permissions (§7) are needed later.
+- **Organization plugin** (official) gives roles/membership within the single-tenant org (§6) without hand-rolling a membership table.
+- **v1 login flow**: manual token copy — user generates an API key from the web UI's settings page, pastes it into `padock login --token=<key>`. No device-code flow in v1 (that's an OAuth Device Authorization Grant implementation cost not justified before there's a multi-user, non-technical audience actually hitting friction here).
+- **v1 PAT scope: none — a key grants the full permissions of the user who created it.** No scopes configured on the API Key plugin yet. This is deliberate, not an oversight: v1 only supports interactive agents (§4/§7) where a human is already in the loop approving risky actions before they happen, so a second permission layer on top would be solving a problem (unattended/non-interactive agents, multi-agent least-privilege) that doesn't exist yet. Revisit when non-interactive/scheduled agents are in scope (§7) — the plugin already supports scoping, so this is a config change, not new infrastructure.
+- **Enterprise directory login (LDAP)**: no raw LDAP bind in v1. Better Auth has no official LDAP plugin (a feature request for one was explicitly closed "not planned" by the maintainers; only an unofficial community plugin exists). The supported enterprise-auth path is Better Auth's official **SSO plugin** (SAML/OIDC) — the realistic modern pattern is fronting AD/LDAP with an identity provider (Entra ID, Okta, or self-hosted Keycloak, which itself can bridge to LDAP) rather than Padock speaking raw directory protocol. Revisit direct LDAP bind only if a real deployment needs it and the SSO path proves insufficient.
 - **Version skew guard**: compile-time type safety doesn't protect a newer CLI against an older self-hosted server. CLI and server release together from the monorepo under one version; the CLI does a version handshake (`GET /api/version`) and warns on mismatch.
 
 ### 5.1.2 Cross-domain data model: the Project/Space entity
@@ -147,7 +150,9 @@ Per-agent-runtime packages that teach a subscription agent when and how to invok
 | Hosting | Self-hosted only for v1, via docker-compose | SME data stays in-house; matches OSS positioning; cloud/SaaS is a possible future add-on, not a v1 goal |
 | Third-party integrations | None — Padock builds its own chat/task/doc services | Core differentiator; avoids being at the mercy of Slack/Notion/etc. API limits and pricing |
 | Data storage | Postgres + Redis + object storage, all self-hosted | Native services need a real system of record; no "aggregate vs. passthrough" tradeoff since there's no external source of truth to sync from |
-| Core tech stack | TypeScript / Node.js full-stack — **T3 stack (Next.js/tRPC/Tailwind/Auth.js) in a Turborepo** (§5.1.1) | One language across backend, web app, CLI, and Skill/MCP tooling; tRPC gives compile-time type safety all the way into the CLI; maintainer's strongest stack; large OSS contributor pool |
+| Core tech stack | TypeScript / Node.js full-stack — **T3 stack (Next.js/tRPC/Tailwind/Prisma) in a Turborepo** (§5.1.1) | One language across backend, web app, CLI, and Skill/MCP tooling; tRPC gives compile-time type safety all the way into the CLI; maintainer's strongest stack; large OSS contributor pool |
+| ORM | Prisma | Maintainer's explicit choice; mature ecosystem, Prisma Studio, official Better Auth adapter |
+| Auth | **Better Auth** (not Auth.js) — API Key plugin as the CLI's PAT mechanism, Organization plugin for org roles, SSO plugin (SAML/OIDC) as the enterprise-directory path | Auth.js is maintenance-only since Better Auth absorbed it in early 2026; Better Auth is framework-agnostic (needed for `realtime`/`worker`, which aren't Next.js apps) and actively developed (acquired by Vercel, July 2026). See §5.1.1 for detail |
 | Backend architecture | Modular monolith, multi-process deployment (`app`/`realtime`/`worker` roles from one codebase) — **not** domain microservices | Cheap cross-domain queries/transactions (§8), one version for self-hosters, one-repo contributor onboarding; uneven load across modules is handled by scaling process roles, not by splitting domains; Redis pub/sub is the extraction seam if ever needed. Same pattern as Plane/Zulip. |
 | Tenancy | Single-tenant: one Padock instance = one organization; roles/permissions within the org | Drastically simpler auth model; matches self-host positioning |
 | Agent transport | CLI-first; MCP server (`padock mcp serve`) is a thin wrapper over the same client | Any agent with a Bash/exec tool can use the CLI even where MCP support is weak; one implementation of "how to talk to Padock" |
@@ -168,7 +173,7 @@ Per-agent-runtime packages that teach a subscription agent when and how to invok
 
 - **Granular agent permission model** (per-project/per-domain/read-write-send scopes): explicitly deferred, not just unresolved — v1's PAT-has-full-access + interactive-only-agents combo (§6) makes it unnecessary for now. Revisit when either non-interactive/scheduled agents or multi-agent least-privilege needs enter scope.
 - **Non-interactive/scheduled agent support**: v1 assumes a human is always present in the agent's session (§6). Supporting unattended agents later requires designing a server-side approval queue/notification mechanism for confirm-before-act (§4) — a real, currently-unscoped piece of work, not a detail.
-- **ORM choice**: Prisma vs. Drizzle — both fit the T3 setup; pick by maintainer familiarity when scaffolding Phase 0. Minor.
+- **Enterprise directory login (LDAP/AD)**: no official Better Auth LDAP plugin exists (§5.1.1). Near-term path is the SSO plugin (SAML/OIDC) fronting the directory via an IdP; revisit raw LDAP bind only if a real deployment proves the SSO path insufficient.
 
 ## 8. Example end-to-end flow (north star scenario)
 
@@ -187,7 +192,7 @@ This flow is the acceptance test for the MVP: if it can't run end-to-end (even w
 
 Build a thin walking skeleton across all three domains first, validate the flow in §8 end-to-end, then deepen each domain — rather than fully building one domain before starting the next.
 
-1. **Phase 0 — Platform skeleton**: Turborepo scaffold, auth (Auth.js + PAT dual-track), `Project` entity + org/user model, Postgres+Redis+storage wiring, docker-compose (`app`/`realtime`/`worker` roles).
+1. **Phase 0 — Platform skeleton**: Turborepo scaffold, auth (Better Auth + API Key/Organization plugins, dual-track cookie/bearer), `Project` entity, Postgres+Redis+storage wiring, docker-compose (`app`/`realtime`/`worker` roles).
 2. **Phase 1 — Thin vertical slice**: DM-only chat, fixed-enum task status, Markdown docs — all Project-scoped per §5.1.2–5.1.3 — enough for §8 to run manually via the web UI / direct API calls.
 3. **Phase 2 — Padock CLI**: implement the command grammar in §5.2 (incl. `padock login` manual-token flow, `tsvector` search) against the Phase 1 API.
 4. **Phase 3 — Claude Code Skill**: `padock init-skill` + dogfeed the §8 scenario end-to-end with a real subscription agent, on the maintainer's own project (§6 first validation target).
@@ -205,6 +210,7 @@ Build a thin walking skeleton across all three domains first, validate the flow 
 - No granular agent permission scopes in v1 (§6, §7) — a PAT is all-or-nothing, matching the interactive-only execution model.
 - No configurable task workflows in v1 (§5.1.3) — fixed four-state enum only.
 - No chat channels/threads in v1 (§5.1.3) — DM only.
+- No raw LDAP bind in v1 (§5.1.1, §7) — enterprise SSO (SAML/OIDC via Better Auth's SSO plugin) is the supported enterprise-auth path; direct LDAP only if later proven necessary.
 
 ## 11. Naming reference note
 
