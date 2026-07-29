@@ -8,5 +8,7 @@ build/
 !.env.example
 *.log
 .DS_Store
+*.tsbuildinfo
+next-env.d.ts
 apps/web/.next/
 packages/db/generated/
