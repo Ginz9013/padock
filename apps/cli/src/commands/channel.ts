@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { createClient, run } from "../client.ts";
-import { resolveProjectId } from "../resolve.ts";
+import { createChannel, listChannels } from "../actions/channel.ts";
 
 export function registerChannelCommands(program: Command): void {
   const channel = program.command("channel");
@@ -10,10 +10,7 @@ export function registerChannelCommands(program: Command): void {
     .option("--project <nameOrId>")
     .action(async (name: string, opts: { project?: string }) => {
       const client = createClient();
-      await run(async () => {
-        const projectId = opts.project ? await resolveProjectId(client, opts.project) : undefined;
-        return client.channel.create.mutate({ name, projectId });
-      });
+      await run(() => createChannel(client, { name, project: opts.project }));
     });
 
   channel
@@ -21,9 +18,6 @@ export function registerChannelCommands(program: Command): void {
     .option("--project <nameOrId>")
     .action(async (opts: { project?: string }) => {
       const client = createClient();
-      await run(async () => {
-        const projectId = opts.project ? await resolveProjectId(client, opts.project) : undefined;
-        return client.channel.list.query(projectId ? { projectId } : undefined);
-      });
+      await run(() => listChannels(client, opts));
     });
 }

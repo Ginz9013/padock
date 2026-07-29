@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { createClient, run } from "../client.ts";
-import { resolveProjectId } from "../resolve.ts";
+import { createTaskState, listTaskStates } from "../actions/taskState.ts";
 
 export function registerTaskStateCommands(program: Command): void {
   const taskState = program.command("task-state");
@@ -19,15 +19,14 @@ export function registerTaskStateCommands(program: Command): void {
         default?: boolean;
       }) => {
         const client = createClient();
-        await run(async () => {
-          const projectId = await resolveProjectId(client, opts.project);
-          return client.taskState.create.mutate({
-            projectId,
+        await run(() =>
+          createTaskState(client, {
+            project: opts.project,
             name: opts.name,
             group: opts.group,
             isDefault: opts.default,
-          });
-        });
+          }),
+        );
       },
     );
 
@@ -36,9 +35,6 @@ export function registerTaskStateCommands(program: Command): void {
     .requiredOption("--project <nameOrId>")
     .action(async (opts: { project: string }) => {
       const client = createClient();
-      await run(async () => {
-        const projectId = await resolveProjectId(client, opts.project);
-        return client.taskState.list.query({ projectId });
-      });
+      await run(() => listTaskStates(client, opts));
     });
 }
