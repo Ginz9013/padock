@@ -14,6 +14,7 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [log, setLog] = useState<string[]>([]);
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [scopes, setScopes] = useState("");
 
   function append(line: string) {
     setLog((prev) => [...prev, line]);
@@ -52,15 +53,23 @@ export default function Home() {
   }
 
   async function createApiKey() {
-    const res = await fetch("/api/auth/api-key/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "padock-cli" }),
-    });
-    const data = await res.json();
-    append(`api-key create: ${res.status} ${JSON.stringify(data)}`);
-    if (typeof data.key === "string") {
+    // Routed through our own apikey.create tRPC procedure, not a raw
+    // fetch to Better Auth's REST endpoint: `permissions`/`userId` are
+    // server-only fields on createApiKey and get rejected over a raw
+    // HTTP passthrough (Phase 6 — PAT 細粒度權限).
+    try {
+      const scopeList = scopes
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const data = await trpc.apikey.create.mutate({
+        name: "padock-cli",
+        scopes: scopeList.length > 0 ? scopeList : undefined,
+      });
+      append(`api-key create: ${JSON.stringify(data)}`);
       setApiKey(data.key);
+    } catch (err) {
+      append(`api-key create error: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -124,6 +133,12 @@ export default function Home() {
 
       <section className="flex flex-col gap-2">
         <h2 className="font-medium">3. API Key (PAT) — the CLI&apos;s auth path</h2>
+        <input
+          className="rounded border px-2 py-1"
+          placeholder="scopes, e.g. task:read,doc:read (blank = full access)"
+          value={scopes}
+          onChange={(e) => setScopes(e.target.value)}
+        />
         <div className="flex gap-2">
           <button className="rounded border px-3 py-1" onClick={createApiKey}>
             Create API key

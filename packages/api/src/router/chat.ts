@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../trpc.ts";
+import { scopedProcedure, router } from "../trpc.ts";
 import { publishEvent } from "../redis.ts";
 
 // DM (recipientId) or channel message (channelId+topicId) — never
@@ -17,7 +17,7 @@ const channelInput = z.object({
 });
 
 export const chatRouter = router({
-  send: protectedProcedure
+  send: scopedProcedure("chat", "write")
     .input(z.union([dmInput, channelInput]))
     .mutation(async ({ ctx, input }) => {
       const message =
@@ -43,7 +43,7 @@ export const chatRouter = router({
       return message;
     }),
 
-  conversation: protectedProcedure
+  conversation: scopedProcedure("chat", "read")
     .input(z.object({ withUserId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.chatMessage.findMany({
@@ -57,7 +57,7 @@ export const chatRouter = router({
       });
     }),
 
-  history: protectedProcedure
+  history: scopedProcedure("chat", "read")
     .input(z.object({ channelId: z.string(), topicId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.chatMessage.findMany({
@@ -70,7 +70,7 @@ export const chatRouter = router({
   // without building real unread/thread tracking (explicitly out of
   // scope, §5.1.3). Explicitly DM-only: recipientId not null, so a
   // channel message the user sent doesn't leak into their DM inbox.
-  inbox: protectedProcedure.query(async ({ ctx }) => {
+  inbox: scopedProcedure("chat", "read").query(async ({ ctx }) => {
     const messages = await ctx.db.chatMessage.findMany({
       where: {
         recipientId: { not: null },

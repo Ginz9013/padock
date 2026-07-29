@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../trpc.ts";
+import { scopedProcedure, router } from "../trpc.ts";
 
 // Plane-style default workflow (CONTEXT.md §5.1.5) — seeded on every
 // new project so it's immediately usable, not stuck with zero valid
@@ -17,7 +17,7 @@ const DEFAULT_TASK_STATES = [
 // so Project creation just needs to find it, not resolve which org the
 // caller belongs to.
 export const projectRouter = router({
-  create: protectedProcedure
+  create: scopedProcedure("project", "write")
     .input(z.object({ name: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const org = await ctx.db.organization.findFirstOrThrow();
@@ -36,7 +36,7 @@ export const projectRouter = router({
       return project;
     }),
 
-  list: protectedProcedure.query(async ({ ctx }) => {
+  list: scopedProcedure("project", "read").query(async ({ ctx }) => {
     return ctx.db.project.findMany({ orderBy: { createdAt: "desc" } });
   }),
 });

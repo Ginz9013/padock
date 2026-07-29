@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../trpc.ts";
+import { scopedProcedure, router } from "../trpc.ts";
 
 export const channelRouter = router({
-  create: protectedProcedure
+  create: scopedProcedure("channel", "write")
     .input(z.object({ name: z.string().min(1), projectId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.db.channel.create({
@@ -14,7 +14,7 @@ export const channelRouter = router({
       });
     }),
 
-  list: protectedProcedure
+  list: scopedProcedure("channel", "read")
     .input(z.object({ projectId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       return ctx.db.channel.findMany({

@@ -1,9 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { protectedProcedure, router } from "../trpc.ts";
+import { scopedProcedure, router } from "../trpc.ts";
 
 export const taskRouter = router({
-  create: protectedProcedure
+  create: scopedProcedure("task", "write")
     .input(
       z.object({
         projectId: z.string(),
@@ -32,7 +32,7 @@ export const taskRouter = router({
       });
     }),
 
-  list: protectedProcedure
+  list: scopedProcedure("task", "read")
     .input(z.object({ projectId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.task.findMany({
@@ -41,7 +41,7 @@ export const taskRouter = router({
       });
     }),
 
-  get: protectedProcedure
+  get: scopedProcedure("task", "read")
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.task.findUniqueOrThrow({ where: { id: input.id } });
@@ -50,7 +50,7 @@ export const taskRouter = router({
   // Takes a resolved stateId, not a name — name resolution (against
   // the task's own project's states) happens CLI-side, same pattern
   // as project/channel (resolve.ts).
-  updateState: protectedProcedure
+  updateState: scopedProcedure("task", "write")
     .input(z.object({ id: z.string(), stateId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.db.task.update({

@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../trpc.ts";
+import { scopedProcedure, router } from "../trpc.ts";
 
 const groupEnum = z.enum(["backlog", "unstarted", "started", "completed", "cancelled"]);
 
 export const taskStateRouter = router({
-  create: protectedProcedure
+  create: scopedProcedure("taskState", "write")
     .input(
       z.object({
         projectId: z.string(),
@@ -26,7 +26,7 @@ export const taskStateRouter = router({
       });
     }),
 
-  list: protectedProcedure
+  list: scopedProcedure("taskState", "read")
     .input(z.object({ projectId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.taskState.findMany({

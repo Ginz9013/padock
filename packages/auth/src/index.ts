@@ -69,6 +69,19 @@ export const auth = betterAuth({
 export type PadockUser = { id: string; email: string; name: string };
 
 /**
+ * `scopes: null` means unrestricted — either a browser session (no PAT
+ * scoping concept applies) or a PAT created with no `permissions` set
+ * (today's default, kept backward compatible per CONTEXT.md §6). A
+ * non-null record restricts the key to the listed resource:action
+ * pairs (Phase 6 — PAT 細粒度權限).
+ */
+export type ResolvedIdentity = {
+  user: PadockUser;
+  authMethod: "session" | "apikey";
+  scopes: Record<string, string[]> | null;
+};
+
+/**
  * The one identity-resolution seam every process role (web/realtime/
  * worker) shares — CONTEXT.md §5.1.1. Tries a browser session cookie
  * first, then falls back to the `x-api-key` header (a CLI's PAT),
@@ -76,10 +89,10 @@ export type PadockUser = { id: string; email: string; name: string };
  * `enableSessionForAPIKeys` flag, which upstream marks as not
  * production-safe.
  */
-export async function resolveIdentity(headers: Headers): Promise<PadockUser | null> {
+export async function resolveIdentity(headers: Headers): Promise<ResolvedIdentity | null> {
   const session = await auth.api.getSession({ headers });
   if (session) {
-    return session.user;
+    return { user: session.user, authMethod: "session", scopes: null };
   }
 
   const key = headers.get("x-api-key");
@@ -88,7 +101,7 @@ export async function resolveIdentity(headers: Headers): Promise<PadockUser | nu
     if (result.valid && result.key) {
       const user = await prisma.user.findUnique({ where: { id: result.key.referenceId } });
       if (user) {
-        return user;
+        return { user, authMethod: "apikey", scopes: result.key.permissions ?? null };
       }
     }
   }
