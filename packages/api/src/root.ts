@@ -5,6 +5,8 @@ import { docRouter } from "./router/doc.ts";
 import { chatRouter } from "./router/chat.ts";
 import { userRouter } from "./router/user.ts";
 import { searchRouter } from "./router/search.ts";
+import { channelRouter } from "./router/channel.ts";
+import { topicRouter } from "./router/topic.ts";
 
 export const appRouter = router({
   health: publicProcedure.query(async ({ ctx }) => {
@@ -20,6 +22,8 @@ export const appRouter = router({
   chat: chatRouter,
   user: userRouter,
   search: searchRouter,
+  channel: channelRouter,
+  topic: topicRouter,
 });
 
 export type AppRouter = typeof appRouter;
