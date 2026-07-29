@@ -229,12 +229,22 @@ model Task {
   @@map("task")
 }
 
+// Block-based storage (CONTEXT.md §5.1's doc entry) — `blocks` is a
+// parsed mdast tree (Markdown AST), not a bespoke block schema: mdast
+// already models a document as a tree of typed blocks (heading,
+// paragraph, list, code, ...), so it doubles as the "AFFiNE-style
+// blocks" storage without inventing a new format. `searchText` is a
+// plain-text extraction of `blocks`, kept only so full-text search
+// stays a normal Postgres text column. Neither is exposed to callers —
+// packages/api/src/router/doc.ts converts `blocks` back to Markdown
+// (`content`) on every read, preserving Phase 1's CLI/Skill contract.
 model Doc {
   id          String   @id @default(cuid())
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title       String
-  content     String
+  blocks      Json
+  searchText  String
   createdById String
   createdBy   User     @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
