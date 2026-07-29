@@ -9,6 +9,8 @@ import { registerChatCommands } from "./commands/chat.ts";
 import { registerUserCommands } from "./commands/user.ts";
 import { registerSearchCommand } from "./commands/search.ts";
 import { registerInitSkillCommand } from "./commands/init-skill.ts";
+import { registerChannelCommands } from "./commands/channel.ts";
+import { registerTopicCommands } from "./commands/topic.ts";
 
 const program = new Command();
 
@@ -23,5 +25,7 @@ registerChatCommands(program);
 registerUserCommands(program);
 registerSearchCommand(program);
 registerInitSkillCommand(program);
+registerChannelCommands(program);
+registerTopicCommands(program);
 
 program.parseAsync(process.argv);
