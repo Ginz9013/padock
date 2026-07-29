@@ -12,6 +12,7 @@ import { registerInitSkillCommand } from "./commands/init-skill.ts";
 import { registerChannelCommands } from "./commands/channel.ts";
 import { registerTopicCommands } from "./commands/topic.ts";
 import { registerTaskStateCommands } from "./commands/task-state.ts";
+import { registerMcpCommand } from "./commands/mcp.ts";
 
 const program = new Command();
 
@@ -29,5 +30,6 @@ registerInitSkillCommand(program);
 registerChannelCommands(program);
 registerTopicCommands(program);
 registerTaskStateCommands(program);
+registerMcpCommand(program);
 
 program.parseAsync(process.argv);
