@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { createClient, run } from "../client.ts";
-import { resolveProjectId } from "../resolve.ts";
+import { search } from "../actions/search.ts";
 
 export function registerSearchCommand(program: Command): void {
   program
@@ -9,12 +9,11 @@ export function registerSearchCommand(program: Command): void {
     .option("--project <nameOrId>")
     .action(async (query: string, opts: { scope?: string; project?: string }) => {
       const client = createClient();
-      await run(async () => {
+      await run(() => {
         const scope = opts.scope
           ? (opts.scope.split(",") as ("docs" | "tasks" | "chat")[])
           : undefined;
-        const projectId = opts.project ? await resolveProjectId(client, opts.project) : undefined;
-        return client.search.search.query({ query, scope, projectId });
+        return search(client, { query, scope, project: opts.project });
       });
     });
 }

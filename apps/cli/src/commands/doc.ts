@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { Command } from "commander";
 import { createClient, run } from "../client.ts";
-import { resolveProjectId } from "../resolve.ts";
+import { createDoc, listDocs, getDoc, updateDoc } from "../actions/doc.ts";
 
 function readContent(opts: { content?: string; file?: string }): string {
   if (opts.file) {
@@ -26,10 +26,7 @@ export function registerDocCommands(program: Command): void {
     .action(async (opts: { project: string; title: string; content?: string; file?: string }) => {
       const client = createClient();
       const content = readContent(opts);
-      await run(async () => {
-        const projectId = await resolveProjectId(client, opts.project);
-        return client.doc.create.mutate({ projectId, title: opts.title, content });
-      });
+      await run(() => createDoc(client, { project: opts.project, title: opts.title, content }));
     });
 
   doc
@@ -37,15 +34,12 @@ export function registerDocCommands(program: Command): void {
     .requiredOption("--project <nameOrId>")
     .action(async (opts: { project: string }) => {
       const client = createClient();
-      await run(async () => {
-        const projectId = await resolveProjectId(client, opts.project);
-        return client.doc.list.query({ projectId });
-      });
+      await run(() => listDocs(client, opts));
     });
 
   doc.command("get <id>").action(async (id: string) => {
     const client = createClient();
-    await run(() => client.doc.get.query({ id }));
+    await run(() => getDoc(client, { id }));
   });
 
   doc
@@ -56,6 +50,6 @@ export function registerDocCommands(program: Command): void {
     .action(async (id: string, opts: { title?: string; content?: string; file?: string }) => {
       const client = createClient();
       const content = opts.content !== undefined || opts.file ? readContent(opts) : undefined;
-      await run(() => client.doc.update.mutate({ id, title: opts.title, content }));
+      await run(() => updateDoc(client, { id, title: opts.title, content }));
     });
 }
