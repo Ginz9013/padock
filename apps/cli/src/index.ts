@@ -11,6 +11,7 @@ import { registerSearchCommand } from "./commands/search.ts";
 import { registerInitSkillCommand } from "./commands/init-skill.ts";
 import { registerChannelCommands } from "./commands/channel.ts";
 import { registerTopicCommands } from "./commands/topic.ts";
+import { registerTaskStateCommands } from "./commands/task-state.ts";
 
 const program = new Command();
 
@@ -27,5 +28,6 @@ registerSearchCommand(program);
 registerInitSkillCommand(program);
 registerChannelCommands(program);
 registerTopicCommands(program);
+registerTaskStateCommands(program);
 
 program.parseAsync(process.argv);
