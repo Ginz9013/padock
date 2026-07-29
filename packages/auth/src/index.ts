@@ -12,6 +12,49 @@ export const auth = betterAuth({
     enabled: true,
   },
   plugins: [organization(), apiKey()],
+  databaseHooks: {
+    user: {
+      create: {
+        // Single-tenant bootstrap (CONTEXT.md §6): one Padock instance
+        // = one organization. The first sign-up creates it and becomes
+        // owner; everyone after just joins as a member. Plain Prisma
+        // calls, not the organization plugin's multi-org API — there's
+        // only ever one org here, no creation/switching UX needed.
+        after: async (user) => {
+          const existingOrg = await prisma.organization.findFirst();
+          if (!existingOrg) {
+            const org = await prisma.organization.create({
+              data: {
+                id: crypto.randomUUID(),
+                name: process.env["PADOCK_ORG_NAME"] ?? "Padock",
+                slug: "padock",
+                createdAt: new Date(),
+              },
+            });
+            await prisma.member.create({
+              data: {
+                id: crypto.randomUUID(),
+                organizationId: org.id,
+                userId: user.id,
+                role: "owner",
+                createdAt: new Date(),
+              },
+            });
+          } else {
+            await prisma.member.create({
+              data: {
+                id: crypto.randomUUID(),
+                organizationId: existingOrg.id,
+                userId: user.id,
+                role: "member",
+                createdAt: new Date(),
+              },
+            });
+          }
+        },
+      },
+    },
+  },
 });
 
 export type PadockUser = { id: string; email: string; name: string };
