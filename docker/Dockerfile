@@ -21,9 +21,10 @@ RUN pnpm --filter @padock/web build
 FROM build AS app
 ENV NODE_ENV=production
 EXPOSE 3000
-# db push (not migrate — no migration history yet, see CONTEXT.md §7)
-# runs on every boot; fine for Phase 0's single-instance self-host.
-CMD ["sh", "-c", "pnpm --filter @padock/db exec prisma db push --accept-data-loss && pnpm --filter @padock/web start"]
+# migrate deploy applies whatever's in prisma/migrations non-
+# interactively — the real migration workflow adopted in Phase 4b
+# (CONTEXT.md §7), replacing the earlier db push convenience.
+CMD ["sh", "-c", "pnpm --filter @padock/db exec prisma migrate deploy && pnpm --filter @padock/web start"]
 
 FROM build AS realtime
 ENV NODE_ENV=production
