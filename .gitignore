@@ -1,0 +1,12 @@
+node_modules/
+.turbo/
+dist/
+.next/
+build/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+apps/web/.next/
+packages/db/generated/
