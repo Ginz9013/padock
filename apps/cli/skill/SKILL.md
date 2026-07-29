@@ -1,7 +1,7 @@
 ---
 name: padock
 description: Use when the user wants to work with a Padock workspace — find or search project info (docs/tasks/chat), create or update tasks, read or write docs, or message a colleague. Triggers on requests like "find X in project Y", "what's the status of...", "mark this task as done/review", "send this to <colleague>".
-version: 0.1.0
+version: 0.3.0
 ---
 
 # Padock
@@ -29,19 +29,41 @@ into the Padock web UI in a browser:
     padock project list
     padock task create --project=<name> --title=<title> [--description=<text>]
     padock task list --project=<name>
-    padock task update <id> --status=todo|in_progress|review|done
+    padock task update <id> --status=<state-name>
+    padock task-state create --project=<name> --name=<name> --group=backlog|unstarted|started|completed|cancelled [--default]
+    padock task-state list --project=<name>
     padock doc create --project=<name> --title=<title> (--content=<text> | --file=<path>)
     padock doc list --project=<name>
     padock doc get <id>
     padock doc update <id> [--title=<title>] (--content=<text> | --file=<path>)
+    padock channel create <name> [--project=<name>]
+    padock channel list [--project=<name>]
+    padock topic create --channel=<name> --title=<title>
+    padock topic list --channel=<name>
     padock chat send --to=<email|name> --message=<text> [--project=<name>]
+    padock chat send --channel=<name> --topic=<title> --message=<text>
     padock chat conversation --with=<email|name>
+    padock chat history --channel=<name> --topic=<title>
     padock chat inbox
     padock user list
     padock search "<query>" [--scope=docs,tasks,chat] [--project=<name>]
 
-`--project`/`--to` accept a name or email — no need to know internal ids.
-Every command prints JSON.
+`--project`/`--to`/`--channel`/`--topic` accept a name or email — no need
+to know internal ids. Every command prints JSON.
+
+Chat is either a DM (`--to`) or a channel message (`--channel`+`--topic`),
+never both. Channels can be org-wide or scoped to a project; anyone can
+read any channel's messages (there's no per-channel membership model) —
+only DMs are private to the two people in them.
+
+Task states are per-project, not a fixed set — `--status` on `task
+update` takes whatever state names that task's project actually has.
+Every project gets six defaults when created (Backlog, Todo, In
+Progress, In Review, Done, Cancelled — "Todo" is where new tasks land),
+and projects can define their own on top with `task-state create`. If
+`padock task update <id> --status=X` fails because `X` doesn't exist,
+run `padock task-state list --project=<name>` to see what's actually
+available in that task's project.
 
 ## Before sending a message or changing a task's status
 

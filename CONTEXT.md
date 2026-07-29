@@ -118,14 +118,48 @@ Key property: the CLI imports the tRPC client and gets **end-to-end type safety*
 
 - **Tasks** belong to exactly one `Project` (required foreign key).
 - **Docs** belong to exactly one `Project` (required foreign key) — v1 has no folder hierarchy beyond this.
-- **Chat** is DM-only in v1 (see §5.1.3) and is *not* organized into project channels yet, but each message can **optionally** carry a `project_id` tag — set by a human or agent when a DM is "about" a project. `--project=X` search spans docs + tasks (always project-scoped) + any chat messages tagged with that project (opt-in).
+- **Chat** shipped DM-only in Phase 1 (see §5.1.3); Phase 4 added Zulip-style channels + topics. A DM can optionally carry a `project_id` tag — set by a human or agent when a DM is "about" a project. A **channel** can itself optionally belong to a Project (its messages inherit that project context; they don't carry their own tag). `--project=X` search spans docs + tasks (always project-scoped) + any project-tagged DMs + any messages in a project-scoped channel (opt-in either way).
 
 ### 5.1.3 Module scope for Phase 1 (confirmed)
 
 - **Chat**: point-to-point DM only. No channels, no threads, no unread state — just send/read a message between two accounts. Enough to validate step 4 of §8 ("發給某某同事"). Messages can optionally carry `project_id` (§5.1.2).
-- **Task**: fixed status enum (`todo` / `in_progress` / `review` / `done`), no custom workflows. Every task belongs to one Project. Custom workflow states are a Phase 4+ concern (Plane-style configurability), not v1.
+- **Task** shipped Phase 1 with a fixed status enum (`todo`/`in_progress`/`review`/`done`), no custom workflows. Phase 4 replaced this with per-project configurable states — see §5.1.5.
 - **Doc**: stored as plain Markdown text, not block-based JSON. `padock doc get <id>` returns Markdown directly — the most LLM/agent-readable format, and the cheapest to build. The long-term AFFiNE-style block model is a storage-layer migration (Markdown → blocks) for later; it does not change the CLI/Skill contract, since agents will keep consuming readable text either way.
 - **Search**: Postgres full-text search (`tsvector`), not semantic/vector search. No embedding model or extra API dependency — consistent with the "no API token required" premise. Padock returns precise keyword/metadata matches; semantic interpretation of results is left to the calling agent's own LLM reasoning, not to Padock's search layer. Revisit only if keyword search proves insufficient in practice.
+
+### 5.1.4 Chat channels/threads (Phase 4, confirmed)
+
+Zulip's stream+topic model (§5.1's reference), not Slack's channel+reply-thread model: a `Channel` contains named `Topic`s, and every message belongs to exactly one topic. A `ChatMessage` is now either a DM (`recipientId` set) or a channel message (`channelId`+`topicId` set) — never both.
+
+- **Channels can be org-wide or project-scoped** (`Channel.projectId` optional) — not one or the other. Same opt-in-tag pattern as a DM's `project_id` (§5.1.2), just one level up: a channel's project context applies to all its messages instead of being set per-message.
+- **No per-channel membership/subscription model in v1** — consistent with §6/§7's "no granular permissions yet" stance. Every org member can read every channel/topic; there's nothing to join or be excluded from. Real per-channel access control is deferred to the same future bucket as granular agent permissions (§7), not invented piecemeal here. DMs remain private to their two participants (enforced at the query layer, unchanged from Phase 1).
+- **Realtime broadcast is unfiltered** — `apps/realtime`'s WebSocket gateway (built Phase 0, unused until now) broadcasts every chat event (DM or channel) to every connected authenticated socket, no per-channel/per-DM filtering. A client's actual read scope is enforced by `chat.history`/`conversation`/`search`, not the push layer — the push is a "something changed, go re-fetch" signal, not a delivery-scoped feed. This is the first real use of the Redis pub/sub seam §5.1 named as the future extraction/scaling point.
+
+### 5.1.5 Task workflows (Phase 4, confirmed)
+
+Plane's actual model (the named reference), replacing Phase 1's fixed `TaskStatus` enum: each `Project` defines its own set of `TaskState`s instead of every task sharing one global enum. A state has a `name`, a semantic `group` (`backlog`/`unstarted`/`started`/`completed`/`cancelled` — Plane's own five categories, so reporting/search can reason across projects even when state *names* differ), a `position` (ordering within that project's workflow), and `isDefault` (which state a new task lands in).
+
+- **Configurable state sets, not configurable transition rules.** Plane itself doesn't hard-enforce which state can move to which — the configurable part is *what states exist* in a project, not a transition-validation engine. Building transition rules here would be scope creep beyond what "Plane-style configurability" actually names.
+- **Every project is seeded with six default states on creation** (Backlog/Todo/In Progress/In Review/Done/Cancelled, "Todo" as default) so it's immediately usable — not stuck with zero valid states until someone manually configures a workflow. Projects can add their own states beyond these (`task-state create`).
+- **`padock task update <id> --status=<name>` resolves the name against that task's own project's states**, not a global enum — the CLI looks the task up first (`task.get`, new in Phase 4) to find its project, then resolves. Two different projects can have identically-named states (e.g. both defining "Blocked") without conflict — `TaskState` is unique per `(projectId, name)`, not globally.
+
+**Migration note (real, not hypothetical — Phase 4 shipped with live dogfood data in play):** Phase 1's two existing tasks had non-null `status` values. Dropping that column required an explicit two-step schema change (add `TaskState`/optional `stateId` first, backfill, then drop `status`/`TaskStatus`), not a single blind schema push. This is what prompted the tooling change below.
+
+### 5.1.6 Schema tooling: `prisma migrate`, not `db push` (Phase 4, confirmed)
+
+Attempting the `status`-column drop above via `prisma db push --accept-data-loss` triggered Prisma's own built-in AI-agent safety gate: it detected an agent invoking a destructive flag and refused to run without the user's explicit, verbatim consent (a real, current guardrail in the Prisma CLI, not a Padock feature). The user's direction after that: stop using `db push` for schema changes going forward, adopt `prisma migrate` properly.
+
+- The existing `db push`-managed database was **baselined**, not reset: `prisma migrate diff --from-empty --to-config-datasource --script` captured the live database's actual current state as `migrations/0_init`, then `prisma migrate resolve --applied 0_init` recorded it as already-applied without executing anything — zero data touched by this step.
+- New schema changes now go through a real migration file, generated via `prisma migrate diff` (comparing the live database against the target `schema.prisma`) and reviewed as a diffable `.sql` file before being applied with `prisma migrate deploy` — not blind `db push --accept-data-loss`. The Docker `app` image's boot command changed to match (`prisma migrate deploy`, not `db push`).
+- This is a real workflow change, not a one-off: every future schema change goes through this same generate-review-apply sequence.
+
+### 5.1.7 Doc block-based storage (Phase 4, confirmed)
+
+Replaces Phase 1's plain-Markdown-text storage, per the migration §5.1.3 always named as coming. **mdast (Markdown AST, from the `remark`/`unified` ecosystem) is the block tree — not a bespoke block schema.** mdast already models a document as a tree of typed blocks (`heading`, `paragraph`, `list`/`listItem`, `code`, `blockquote`, ...); that's what "block-based storage instead of a raw text blob" means, so there was nothing to invent. `Doc.blocks` stores the parsed tree (`Json`); `Doc.searchText` is a plain-text extraction of it (`mdast-util-to-string`), kept only so full-text search stays a normal Postgres `text` column instead of reaching into JSON at query time.
+
+- **The CLI/Skill contract is unchanged, verified rather than assumed** — `packages/api/src/router/doc.ts` parses incoming Markdown to `blocks` on write and stringifies `blocks` back to Markdown as `content` on every read (`get`/`list`/`create`/`update` all return `content`, never `blocks`/`searchText`). Confirmed zero files touched under `apps/cli/` or `apps/cli/skill/` for this phase.
+- **Round-tripping is structurally, not byte-for-byte, identical.** `remark-stringify` normalizes on the way back out — e.g. `-` bullets become `*`, a trailing newline gets added. Content and meaning are unchanged; exact source bytes are not preserved. This is a real, observed deviation from what the original Phase 1 wording ("agents will keep consuming readable text either way") implied, not a defect — no agent or human reading either version would notice a semantic difference, but it's worth being precise that it isn't a lossless byte-identity guarantee.
+- **No custom block types, no CRDT.** Both stay exactly as scoped: a future editor UI needing block types beyond what Markdown expresses would be an additive schema extension on top of mdast, not a reason to have built a bespoke schema now; CRDT/multi-user co-editing remains deferred per §6.
 
 ### 5.2 Padock CLI
 
@@ -175,9 +209,13 @@ The CLI is the single implementation of "how to talk to Padock." Everything abov
 | Agent execution mode (v1) | Interactive only — agent runs in a live session with a human present | Confirm-before-act (§4) is just the conversation itself; no server-side approval queue needed yet. Non-interactive/scheduled agents deferred (§10) |
 | PAT scope | No granular scopes in v1 — a PAT = full permissions of the user who created it | A second permission layer has no problem to solve yet while every action is human-approved in real time; add granularity when non-interactive agents or stricter least-privilege needs arrive |
 | CLI login flow | Manual token copy: generate PAT in web UI settings → `padock login --token=...` | Device-code (OAuth Device Authorization Grant) flow is nicer UX but unjustified implementation cost before v1 has real friction from it |
-| Doc storage format | Plain Markdown text, not block-based JSON | Cheapest to build, most LLM/agent-readable; AFFiNE-style block model is a future storage migration, not a CLI/Skill contract change |
+| Doc storage format (Phase 1) | Plain Markdown text, not block-based JSON | Cheapest to build, most LLM/agent-readable; AFFiNE-style block model is a future storage migration, not a CLI/Skill contract change |
+| Doc block storage (Phase 4) | mdast (Markdown AST) *is* the block tree, no bespoke schema; `blocks`+`searchText`, CLI/Skill still only ever see Markdown `content` | §5.1.7. Round-tripping is structural, not byte-for-byte (remark-stringify normalizes bullets/trailing newline) |
 | Task model (Phase 1) | Fixed status enum (`todo`/`in_progress`/`review`/`done`), one Project per task, no custom workflows | Matches §8's exact need ("改成 review"); configurable workflows (Plane-style) are a Phase 4+ concern |
 | Chat scope (Phase 1) | Point-to-point DM only, no channels/threads/unread state; messages optionally tag a `project_id` | Matches §8's exact need ("發給某某同事"); full Zulip-style channel model deferred to Phase 4 |
+| Chat channels (Phase 4) | Zulip stream+topic model; `Channel.projectId` optional (org-wide or project-scoped, not one or the other); no per-channel membership model; realtime broadcast unfiltered | §5.1.4. Membership/access-control deferred to the same bucket as granular agent permissions (§7); realtime push finally uses Phase 0's ws+Redis plumbing for something real |
+| Task workflows (Phase 4) | Per-project `TaskState` (Plane's model) replaces the fixed enum; configurable state *sets*, not transition rules; six defaults seeded per project | §5.1.5. Matches "Plane-style configurability" without building a transition-rule engine nobody asked for |
+| Schema tooling (Phase 4) | `prisma migrate` (baseline + generate + review + `migrate deploy`), not `db push` | §5.1.6. Triggered by Prisma's own AI-agent safety gate refusing a blind `db push --accept-data-loss`; user directed the switch to migrations for all future schema changes |
 | Skill distribution (v1) | One portable `SKILL.md` (open Agent Skills standard, §5.3) — no per-agent adapters. `padock init-skill` writes it to `.agents/skills/`, `~/.agents/skills/`, and `~/.claude/skills/`, no marketplace | The standard is natively supported by Claude Code, Codex CLI, and Gemini CLI already — one file reaches all three. Keeps Skill and CLI versions in lockstep automatically; avoids a second release pipeline pre-launch |
 
 ## 7. Open decisions (deferred, not blocking Phase 0–3)
@@ -207,7 +245,7 @@ Build a thin walking skeleton across all three domains first, validate the flow 
 2. **Phase 1 — Thin vertical slice**: DM-only chat, fixed-enum task status, Markdown docs — all Project-scoped per §5.1.2–5.1.3 — enough for §8 to run manually via the web UI / direct API calls.
 3. **Phase 2 — Padock CLI**: implement the command grammar in §5.2 (incl. `padock login` manual-token flow, `tsvector` search) against the Phase 1 API.
 4. **Phase 3 — Universal Agent Skill**: one portable `SKILL.md` (§5.3, the open Agent Skills standard — no per-agent adapters needed), `padock init-skill` distributing it to Claude Code/Codex CLI/Gemini CLI's discovery paths in one shot; dogfeed the §8 scenario end-to-end with a real subscription agent (Claude Code, since that's the maintainer's daily driver — §6 first validation target), but the artifact itself isn't Claude-specific.
-5. **Phase 4 — Deepen each domain**: channels/threads for chat, configurable workflows for tasks, block-based editing for docs (Markdown → blocks migration).
+5. **Phase 4 — Deepen each domain** — **done**: channels/threads for chat (§5.1.4), configurable workflows for tasks (§5.1.5), block-based doc storage (§5.1.7), plus the switch to `prisma migrate` (§5.1.6) that came out of doing this with live dogfood data. Sequenced one slice at a time rather than simultaneously, per this session's choice.
 6. **Phase 5 — Optional richer transport & marketplace distribution**: MCP server wrapper (`padock mcp serve`) for agents that prefer structured tool calls over shell-parsing the CLI, publishing to agentskills.io/an official marketplace. Not cross-agent compatibility work anymore — Phase 3 already covers that — purely later-stage nice-to-haves.
 7. **Phase 6 — Non-interactive agents & fine-grained permissions**: server-side approval queue for confirm-before-act, granular PAT scopes — only once unattended/scheduled agents are actually in scope (§7).
 
