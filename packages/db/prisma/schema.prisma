@@ -173,6 +173,7 @@ model Project {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   tasks          Task[]
+  taskStates     TaskState[]
   docs           Doc[]
   chatMessages   ChatMessage[]
   channels       Channel[]
@@ -181,26 +182,50 @@ model Project {
   @@map("project")
 }
 
-enum TaskStatus {
-  todo
-  in_progress
-  review
-  done
+// Plane-style configurable workflow (CONTEXT.md §5.1.5): each project
+// defines its own set of states instead of sharing one global enum.
+// `group` is the cross-project semantic category (for reporting/search
+// even when names differ), `position` orders them in that project's
+// workflow, `isDefault` is the state new tasks land in when unset.
+enum TaskStateGroup {
+  backlog
+  unstarted
+  started
+  completed
+  cancelled
+}
+
+model TaskState {
+  id          String         @id @default(cuid())
+  projectId   String
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  group       TaskStateGroup
+  position    Int
+  isDefault   Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  tasks       Task[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("task_state")
 }
 
 model Task {
-  id          String     @id @default(cuid())
+  id          String      @id @default(cuid())
   projectId   String
-  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title       String
   description String?
-  status      TaskStatus @default(todo)
+  stateId     String
+  state       TaskState @relation(fields: [stateId], references: [id])
   createdById String
-  createdBy   User       @relation(fields: [createdById], references: [id])
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdBy   User        @relation(fields: [createdById], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   @@index([projectId])
+  @@index([stateId])
   @@map("task")
 }
 

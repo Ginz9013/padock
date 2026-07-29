@@ -6,8 +6,9 @@
   "types": "./src/index.ts",
   "scripts": {
     "generate": "prisma generate",
-    "push": "prisma db push",
-    "migrate": "prisma migrate dev",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:status": "prisma migrate status",
     "studio": "prisma studio",
     "typecheck": "tsc -p tsconfig.json"
   },
