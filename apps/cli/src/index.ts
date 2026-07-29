@@ -8,6 +8,7 @@ import { registerDocCommands } from "./commands/doc.ts";
 import { registerChatCommands } from "./commands/chat.ts";
 import { registerUserCommands } from "./commands/user.ts";
 import { registerSearchCommand } from "./commands/search.ts";
+import { registerInitSkillCommand } from "./commands/init-skill.ts";
 
 const program = new Command();
 
@@ -21,5 +22,6 @@ registerDocCommands(program);
 registerChatCommands(program);
 registerUserCommands(program);
 registerSearchCommand(program);
+registerInitSkillCommand(program);
 
 program.parseAsync(process.argv);
