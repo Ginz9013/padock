@@ -11,7 +11,16 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
-  plugins: [organization(), apiKey()],
+  plugins: [
+    organization(),
+    // Default rate limit is 10 requests/day per key — fine for a
+    // multi-tenant SaaS guarding against abuse, but wrong for Padock's
+    // v1 threat model (§6/§7): a PAT already grants full permission
+    // and every action is human-approved in the same session, so
+    // there's nothing an artificial request quota adds. Disabled, not
+    // just raised, since there's no rate-limit-shaped problem here yet.
+    apiKey({ rateLimit: { enabled: false } }),
+  ],
   databaseHooks: {
     user: {
       create: {
