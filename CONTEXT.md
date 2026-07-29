@@ -49,11 +49,17 @@ Three native subsystems, one shared platform, one integration layer that reaches
                 │ (padock ...)    │    one command grammar
                 └────────┬────────┘    across all 3 domains
                          │
+                ┌────────┴────────┐
+                │  one SKILL.md   │  ← open Agent Skills standard (§5.3)
+                │ (padock init-   │    padock init-skill distributes it
+                │  skill writes   │    unmodified to every discovery path
+                │  it 3 places)   │
+                └────────┬────────┘
+                         │
         ┌────────────────┼────────────────────┐
         │                │                    │
  ┌──────┴──────┐  ┌──────┴──────┐      ┌──────┴──────┐
  │ Claude Code │  │  Codex CLI  │      │ Gemini CLI  │
- │   Skill     │  │   adapter   │      │  extension  │
  └─────────────┘  └─────────────┘      └─────────────┘
    (subscription-tier agents — no API-token billing needed)
 ```
@@ -133,16 +139,20 @@ padock chat send --to=<user|channel> --message="..."
 padock whoami / padock login   # auth against a running Padock instance
 ```
 
-The CLI is the single implementation of "how to talk to Padock." Everything above it (MCP server, Skill packages) is a thin adapter, not a reimplementation.
+The CLI is the single implementation of "how to talk to Padock." Everything above it (MCP server, the Skill's instructions — §5.3) is a thin adapter, not a reimplementation.
 
-### 5.3 Skill / adapter layer
+### 5.3 Skill layer — one portable SKILL.md, not per-agent adapters
 
-Per-agent-runtime packages that teach a subscription agent when and how to invoke the CLI:
+**Agent Skills (the `SKILL.md` format) is a cross-vendor open standard, not a Claude-only mechanism** — published at agentskills.io in December 2025, adopted within 48 hours by OpenAI and Microsoft, and natively supported by Claude Code, Codex CLI, Gemini CLI, Cursor, GitHub Copilot, and 35+ other tools as of mid-2026. As long as a `SKILL.md` sticks to the *core* spec — `name`/`description` frontmatter + a Markdown instruction body, no tool-specific frontmatter extensions — the same file works unmodified across all of them. This changes the design from "build Claude's adapter first, generalize later" to: **write one Skill, distribute it to every discovery path.**
 
-- **Claude Code**: a Skill (`SKILL.md` + optional scripts) that documents the command grammar and trigger phrases; can shell out to the CLI directly (works today via the Bash tool) and/or wrap an MCP server (`padock mcp serve`) for richer structured tool calls.
-- **Codex CLI / Gemini CLI**: equivalent thin adapters (tool/plugin manifest + instructions), same underlying CLI.
-- Recommended build order: Claude Code Skill first (dogfeed-able immediately, richest skill/MCP ecosystem today), then generalize.
-- **Distribution (v1)**: the Skill ships as part of the `padock` CLI package, not through a separate marketplace/registry. Running `padock init-skill` writes a local `SKILL.md` (matched to the installed CLI's version) into `~/.claude/skills/`. This keeps the Skill in lockstep with the CLI's command grammar automatically and avoids a second release/review pipeline before the project has any external users. Publishing to an official skill/plugin marketplace is a later distribution optimization, not a v1 requirement.
+- **Content**: one `SKILL.md` documenting the CLI's command grammar (§5.2) and trigger phrases — teaches any agent when and how to shell out to `padock`. No agent-specific variants; if a tool-specific extension is ever needed for one platform, it's additive (tools ignore fields they don't recognize) and doesn't fork the file.
+- **Discovery paths differ per tool, even though the file doesn't** — `padock init-skill` writes the identical `SKILL.md` to each known location:
+  - `.agents/skills/padock/` (repo-level) — scanned directly by **Codex CLI** and aliased by **Gemini CLI** (`.gemini/skills/` treats `.agents/skills/` as an alias)
+  - `~/.agents/skills/padock/` (user-level) — same alias relationship, covers both tools' user-tier scan
+  - `~/.claude/skills/padock/` — **Claude Code**'s own convention; not confirmed to alias `.agents/skills/`, so it gets its own copy
+  - Three file writes of one identical source, not three different packages.
+- **Distribution (v1)**: ships as part of the `padock` CLI package, not a separate marketplace/registry. `padock init-skill` writes the version-matched `SKILL.md` to the paths above. Keeps the Skill in lockstep with the CLI's command grammar automatically; avoids a second release/review pipeline before the project has external users. Publishing to agentskills.io or an official marketplace is a later distribution optimization, not a v1 requirement.
+- **Still genuinely deferred** (real work, not just "adapter glue" — moved to Phase 5): an MCP server wrapper (`padock mcp serve`) for agents that prefer structured tool calls over shell-parsing a CLI's stdout. Not required for cross-agent reach anymore — the Skill format already solves discovery/instruction portability — so this is purely an optional richer transport, not a compatibility requirement.
 
 ## 6. Confirmed decisions
 
@@ -168,7 +178,7 @@ Per-agent-runtime packages that teach a subscription agent when and how to invok
 | Doc storage format | Plain Markdown text, not block-based JSON | Cheapest to build, most LLM/agent-readable; AFFiNE-style block model is a future storage migration, not a CLI/Skill contract change |
 | Task model (Phase 1) | Fixed status enum (`todo`/`in_progress`/`review`/`done`), one Project per task, no custom workflows | Matches §8's exact need ("改成 review"); configurable workflows (Plane-style) are a Phase 4+ concern |
 | Chat scope (Phase 1) | Point-to-point DM only, no channels/threads/unread state; messages optionally tag a `project_id` | Matches §8's exact need ("發給某某同事"); full Zulip-style channel model deferred to Phase 4 |
-| Skill distribution (v1) | `padock init-skill` generates a local `SKILL.md` from the installed CLI, no marketplace | Keeps Skill and CLI versions in lockstep automatically; avoids a second release pipeline pre-launch |
+| Skill distribution (v1) | One portable `SKILL.md` (open Agent Skills standard, §5.3) — no per-agent adapters. `padock init-skill` writes it to `.agents/skills/`, `~/.agents/skills/`, and `~/.claude/skills/`, no marketplace | The standard is natively supported by Claude Code, Codex CLI, and Gemini CLI already — one file reaches all three. Keeps Skill and CLI versions in lockstep automatically; avoids a second release pipeline pre-launch |
 
 ## 7. Open decisions (deferred, not blocking Phase 0–3)
 
@@ -196,9 +206,9 @@ Build a thin walking skeleton across all three domains first, validate the flow 
 1. **Phase 0 — Platform skeleton**: Turborepo scaffold, auth (Better Auth + API Key/Organization plugins, dual-track cookie/bearer), `Project` entity, Postgres+Redis+storage wiring, docker-compose (`app`/`realtime`/`worker` roles).
 2. **Phase 1 — Thin vertical slice**: DM-only chat, fixed-enum task status, Markdown docs — all Project-scoped per §5.1.2–5.1.3 — enough for §8 to run manually via the web UI / direct API calls.
 3. **Phase 2 — Padock CLI**: implement the command grammar in §5.2 (incl. `padock login` manual-token flow, `tsvector` search) against the Phase 1 API.
-4. **Phase 3 — Claude Code Skill**: `padock init-skill` + dogfeed the §8 scenario end-to-end with a real subscription agent, on the maintainer's own project (§6 first validation target).
+4. **Phase 3 — Universal Agent Skill**: one portable `SKILL.md` (§5.3, the open Agent Skills standard — no per-agent adapters needed), `padock init-skill` distributing it to Claude Code/Codex CLI/Gemini CLI's discovery paths in one shot; dogfeed the §8 scenario end-to-end with a real subscription agent (Claude Code, since that's the maintainer's daily driver — §6 first validation target), but the artifact itself isn't Claude-specific.
 5. **Phase 4 — Deepen each domain**: channels/threads for chat, configurable workflows for tasks, block-based editing for docs (Markdown → blocks migration).
-6. **Phase 5 — Generalize the adapter layer**: Codex CLI / Gemini CLI adapters, MCP server wrapper, skill-marketplace distribution.
+6. **Phase 5 — Optional richer transport & marketplace distribution**: MCP server wrapper (`padock mcp serve`) for agents that prefer structured tool calls over shell-parsing the CLI, publishing to agentskills.io/an official marketplace. Not cross-agent compatibility work anymore — Phase 3 already covers that — purely later-stage nice-to-haves.
 7. **Phase 6 — Non-interactive agents & fine-grained permissions**: server-side approval queue for confirm-before-act, granular PAT scopes — only once unattended/scheduled agents are actually in scope (§7).
 
 ## 10. Non-goals (v1)
