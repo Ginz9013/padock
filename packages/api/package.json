@@ -11,11 +11,14 @@
     "@trpc/server": "11.18.0",
     "zod": "4.4.3",
     "ioredis": "5.11.1",
+    "remark": "15.0.1",
+    "mdast-util-to-string": "4.0.0",
     "@padock/auth": "workspace:*",
     "@padock/db": "workspace:*"
   },
   "devDependencies": {
     "@padock/config": "workspace:*",
+    "@types/mdast": "4.0.4",
     "typescript": "^5.7.0"
   }
 }

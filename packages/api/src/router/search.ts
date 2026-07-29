@@ -38,13 +38,16 @@ export const searchRouter = router({
       const results: SearchResult[] = [];
 
       if (scopes.includes("docs")) {
+        // searchText is a plain-text extraction of the block tree
+        // (packages/db's Doc model) — content itself is now stored as
+        // blocks (JSON), not a plain-text column tsvector can index.
         const rows = await ctx.db.$queryRaw<
-          Array<{ id: string; projectId: string; title: string; content: string; createdAt: Date; rank: number }>
+          Array<{ id: string; projectId: string; title: string; searchText: string; createdAt: Date; rank: number }>
         >`
-          SELECT id, "projectId", title, content, "createdAt",
-                 ts_rank(to_tsvector('english', title || ' ' || content), websearch_to_tsquery('english', ${input.query})) AS rank
+          SELECT id, "projectId", title, "searchText", "createdAt",
+                 ts_rank(to_tsvector('english', title || ' ' || "searchText"), websearch_to_tsquery('english', ${input.query})) AS rank
           FROM doc
-          WHERE to_tsvector('english', title || ' ' || content) @@ websearch_to_tsquery('english', ${input.query})
+          WHERE to_tsvector('english', title || ' ' || "searchText") @@ websearch_to_tsquery('english', ${input.query})
           ${projectFilter}
           ORDER BY rank DESC
           LIMIT 20
@@ -57,7 +60,7 @@ export const searchRouter = router({
             channelId: null,
             topicId: null,
             title: row.title,
-            snippet: row.content.slice(0, 200),
+            snippet: row.searchText.slice(0, 200),
             rank: Number(row.rank),
             createdAt: row.createdAt,
           });
