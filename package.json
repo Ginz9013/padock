@@ -13,7 +13,10 @@
     "db:generate": "dotenv -e .env -- pnpm --filter @padock/db generate",
     "db:push": "dotenv -e .env -- pnpm --filter @padock/db push",
     "db:studio": "dotenv -e .env -- pnpm --filter @padock/db studio",
-    "auth:generate": "dotenv -e .env -- pnpm --filter @padock/auth exec auth generate --config ./src/index.ts --output ../db/prisma/schema.prisma -y"
+    "auth:generate": "dotenv -e .env -- pnpm --filter @padock/auth exec auth generate --config ./src/index.ts --output ../db/prisma/schema.prisma -y",
+    "docker:up": "docker compose --env-file .env -f docker/docker-compose.yml up --build",
+    "docker:down": "docker compose --env-file .env -f docker/docker-compose.yml down",
+    "docker:logs": "docker compose --env-file .env -f docker/docker-compose.yml logs -f"
   },
   "devDependencies": {
     "dotenv-cli": "^8.0.0",
