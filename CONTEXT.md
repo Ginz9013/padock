@@ -118,7 +118,7 @@ Key property: the CLI imports the tRPC client and gets **end-to-end type safety*
 
 - **Tasks** belong to exactly one `Project` (required foreign key).
 - **Docs** belong to exactly one `Project` (required foreign key) — v1 has no folder hierarchy beyond this.
-- **Chat** is DM-only in v1 (see §5.1.3) and is *not* organized into project channels yet, but each message can **optionally** carry a `project_id` tag — set by a human or agent when a DM is "about" a project. `--project=X` search spans docs + tasks (always project-scoped) + any chat messages tagged with that project (opt-in).
+- **Chat** shipped DM-only in Phase 1 (see §5.1.3); Phase 4 added Zulip-style channels + topics. A DM can optionally carry a `project_id` tag — set by a human or agent when a DM is "about" a project. A **channel** can itself optionally belong to a Project (its messages inherit that project context; they don't carry their own tag). `--project=X` search spans docs + tasks (always project-scoped) + any project-tagged DMs + any messages in a project-scoped channel (opt-in either way).
 
 ### 5.1.3 Module scope for Phase 1 (confirmed)
 
@@ -126,6 +126,14 @@ Key property: the CLI imports the tRPC client and gets **end-to-end type safety*
 - **Task**: fixed status enum (`todo` / `in_progress` / `review` / `done`), no custom workflows. Every task belongs to one Project. Custom workflow states are a Phase 4+ concern (Plane-style configurability), not v1.
 - **Doc**: stored as plain Markdown text, not block-based JSON. `padock doc get <id>` returns Markdown directly — the most LLM/agent-readable format, and the cheapest to build. The long-term AFFiNE-style block model is a storage-layer migration (Markdown → blocks) for later; it does not change the CLI/Skill contract, since agents will keep consuming readable text either way.
 - **Search**: Postgres full-text search (`tsvector`), not semantic/vector search. No embedding model or extra API dependency — consistent with the "no API token required" premise. Padock returns precise keyword/metadata matches; semantic interpretation of results is left to the calling agent's own LLM reasoning, not to Padock's search layer. Revisit only if keyword search proves insufficient in practice.
+
+### 5.1.4 Chat channels/threads (Phase 4, confirmed)
+
+Zulip's stream+topic model (§5.1's reference), not Slack's channel+reply-thread model: a `Channel` contains named `Topic`s, and every message belongs to exactly one topic. A `ChatMessage` is now either a DM (`recipientId` set) or a channel message (`channelId`+`topicId` set) — never both.
+
+- **Channels can be org-wide or project-scoped** (`Channel.projectId` optional) — not one or the other. Same opt-in-tag pattern as a DM's `project_id` (§5.1.2), just one level up: a channel's project context applies to all its messages instead of being set per-message.
+- **No per-channel membership/subscription model in v1** — consistent with §6/§7's "no granular permissions yet" stance. Every org member can read every channel/topic; there's nothing to join or be excluded from. Real per-channel access control is deferred to the same future bucket as granular agent permissions (§7), not invented piecemeal here. DMs remain private to their two participants (enforced at the query layer, unchanged from Phase 1).
+- **Realtime broadcast is unfiltered** — `apps/realtime`'s WebSocket gateway (built Phase 0, unused until now) broadcasts every chat event (DM or channel) to every connected authenticated socket, no per-channel/per-DM filtering. A client's actual read scope is enforced by `chat.history`/`conversation`/`search`, not the push layer — the push is a "something changed, go re-fetch" signal, not a delivery-scoped feed. This is the first real use of the Redis pub/sub seam §5.1 named as the future extraction/scaling point.
 
 ### 5.2 Padock CLI
 
@@ -178,6 +186,7 @@ The CLI is the single implementation of "how to talk to Padock." Everything abov
 | Doc storage format | Plain Markdown text, not block-based JSON | Cheapest to build, most LLM/agent-readable; AFFiNE-style block model is a future storage migration, not a CLI/Skill contract change |
 | Task model (Phase 1) | Fixed status enum (`todo`/`in_progress`/`review`/`done`), one Project per task, no custom workflows | Matches §8's exact need ("改成 review"); configurable workflows (Plane-style) are a Phase 4+ concern |
 | Chat scope (Phase 1) | Point-to-point DM only, no channels/threads/unread state; messages optionally tag a `project_id` | Matches §8's exact need ("發給某某同事"); full Zulip-style channel model deferred to Phase 4 |
+| Chat channels (Phase 4) | Zulip stream+topic model; `Channel.projectId` optional (org-wide or project-scoped, not one or the other); no per-channel membership model; realtime broadcast unfiltered | §5.1.4. Membership/access-control deferred to the same bucket as granular agent permissions (§7); realtime push finally uses Phase 0's ws+Redis plumbing for something real |
 | Skill distribution (v1) | One portable `SKILL.md` (open Agent Skills standard, §5.3) — no per-agent adapters. `padock init-skill` writes it to `.agents/skills/`, `~/.agents/skills/`, and `~/.claude/skills/`, no marketplace | The standard is natively supported by Claude Code, Codex CLI, and Gemini CLI already — one file reaches all three. Keeps Skill and CLI versions in lockstep automatically; avoids a second release pipeline pre-launch |
 
 ## 7. Open decisions (deferred, not blocking Phase 0–3)
@@ -207,7 +216,7 @@ Build a thin walking skeleton across all three domains first, validate the flow 
 2. **Phase 1 — Thin vertical slice**: DM-only chat, fixed-enum task status, Markdown docs — all Project-scoped per §5.1.2–5.1.3 — enough for §8 to run manually via the web UI / direct API calls.
 3. **Phase 2 — Padock CLI**: implement the command grammar in §5.2 (incl. `padock login` manual-token flow, `tsvector` search) against the Phase 1 API.
 4. **Phase 3 — Universal Agent Skill**: one portable `SKILL.md` (§5.3, the open Agent Skills standard — no per-agent adapters needed), `padock init-skill` distributing it to Claude Code/Codex CLI/Gemini CLI's discovery paths in one shot; dogfeed the §8 scenario end-to-end with a real subscription agent (Claude Code, since that's the maintainer's daily driver — §6 first validation target), but the artifact itself isn't Claude-specific.
-5. **Phase 4 — Deepen each domain**: channels/threads for chat, configurable workflows for tasks, block-based editing for docs (Markdown → blocks migration).
+5. **Phase 4 — Deepen each domain** (sequenced one at a time, not simultaneously): ~~channels/threads for chat~~ **done** (§5.1.4) — configurable workflows for tasks, block-based editing for docs (Markdown → blocks migration) still pending.
 6. **Phase 5 — Optional richer transport & marketplace distribution**: MCP server wrapper (`padock mcp serve`) for agents that prefer structured tool calls over shell-parsing the CLI, publishing to agentskills.io/an official marketplace. Not cross-agent compatibility work anymore — Phase 3 already covers that — purely later-stage nice-to-haves.
 7. **Phase 6 — Non-interactive agents & fine-grained permissions**: server-side approval queue for confirm-before-act, granular PAT scopes — only once unattended/scheduled agents are actually in scope (§7).
 
