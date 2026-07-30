@@ -31,10 +31,17 @@ export function ChatThread({
   target,
   projectId,
   userNames,
+  onFocusInput,
 }: {
   target: Target;
   projectId?: string;
   userNames: Map<string, string>;
+  // Fired when the compose box gains focus — the signal a caller can
+  // use to mark this conversation read (e.g. clear an unread badge):
+  // coming back to type a reply means the user has noticed whatever
+  // arrived while the thread was already open, which a plain "select
+  // this conversation" read-marker wouldn't catch on its own.
+  onFocusInput?: () => void;
 }) {
   const { data: session } = useSession();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -147,6 +154,7 @@ export function ChatThread({
               send();
             }
           }}
+          onFocus={onFocusInput}
           placeholder="Write a message…"
           className="min-h-9 flex-1 resize-none"
           rows={1}

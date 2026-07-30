@@ -236,6 +236,7 @@ export default function DashboardPage() {
                     : { kind: "channel", channelId: selected.channelId }
                 }
                 userNames={userNames}
+                onFocusInput={() => markRead(selected.key)}
               />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
