@@ -200,13 +200,14 @@ enum ProjectMemberRole {
 }
 
 model ProjectMember {
-  id        String            @id @default(cuid())
-  projectId String
-  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      ProjectMemberRole @default(member)
-  createdAt DateTime          @default(now())
+  id              String            @id @default(cuid())
+  projectId       String
+  project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role            ProjectMemberRole @default(member)
+  createdAt       DateTime          @default(now())
+  taskAssignments TaskAssignee[]
 
   @@unique([projectId, userId])
   @@index([projectId])
@@ -243,22 +244,58 @@ model TaskState {
   @@map("task_state")
 }
 
+// Plane's own five-level scheme (`none` is an explicit "no priority set",
+// not the same as an unset/null column — keeps Board/Table grouping simple).
+enum TaskPriority {
+  urgent
+  high
+  medium
+  low
+  none
+}
+
 model Task {
-  id          String      @id @default(cuid())
+  id          String         @id @default(cuid())
   projectId   String
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title       String
   description String?
   stateId     String
-  state       TaskState @relation(fields: [stateId], references: [id])
+  state       TaskState      @relation(fields: [stateId], references: [id])
+  priority    TaskPriority   @default(none)
+  startDate   DateTime?
+  endDate     DateTime?
+  assignees   TaskAssignee[]
   createdById String
-  createdBy   User        @relation(fields: [createdById], references: [id])
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdBy   User           @relation(fields: [createdById], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   @@index([projectId])
   @@index([stateId])
+  @@index([projectId, startDate])
+  @@index([projectId, endDate])
   @@map("task")
+}
+
+// An assignee is a ProjectMember, not a bare User — being assignable to a
+// task requires having been added to that project first (§ProjectMember).
+// Invariant "projectMember.projectId === task.projectId" is enforced in
+// the API router, not the schema — same precedent as ChatMessage's
+// DM-vs-channel exclusivity (Prisma has no cross-column CHECK constraint
+// DSL to express it directly).
+model TaskAssignee {
+  id              String        @id @default(cuid())
+  taskId          String
+  task            Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  projectMemberId String
+  projectMember   ProjectMember @relation(fields: [projectMemberId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@unique([taskId, projectMemberId])
+  @@index([taskId])
+  @@index([projectMemberId])
+  @@map("task_assignee")
 }
 
 // Block-based storage (CONTEXT.md §5.1's doc entry) — `blocks` is a
