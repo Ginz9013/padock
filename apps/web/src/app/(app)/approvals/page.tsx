@@ -1,14 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import type { AppRouter } from "@padock/api";
 
 import { Button } from "@/components/ui/button";
-
-const trpc = createTRPCClient<AppRouter>({
-  links: [httpBatchLink({ url: "/api/trpc" })],
-});
+import { trpc } from "@/lib/trpc";
 
 // Hand-written rather than derived via Awaited<ReturnType<...>> — the
 // latter forces TS to instantiate through approval.ts's own
