@@ -3,6 +3,7 @@ import { remark } from "remark";
 import { toString as mdastToString } from "mdast-util-to-string";
 import { scopedProcedure, router } from "../trpc.ts";
 import { runOrQueue } from "../approvalGate.ts";
+import { assertProjectMember } from "../projectAccess.ts";
 
 // Storage is block-based (mdast tree, per the Doc model) but the
 // CLI/Skill contract from Phase 1 doesn't change: callers only ever
@@ -28,6 +29,7 @@ export const docRouter = router({
     )
     .mutation(async ({ ctx, input }) =>
       runOrQueue(ctx, "doc.create", input, async () => {
+        await assertProjectMember(ctx.db, input.projectId, ctx.user.id);
         const { blocks, searchText } = parseMarkdown(input.content);
         const doc = await ctx.db.doc.create({
           data: {
@@ -45,6 +47,7 @@ export const docRouter = router({
   list: scopedProcedure("doc", "read")
     .input(z.object({ projectId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertProjectMember(ctx.db, input.projectId, ctx.user.id);
       const docs = await ctx.db.doc.findMany({
         where: { projectId: input.projectId },
         orderBy: { createdAt: "desc" },
@@ -56,6 +59,7 @@ export const docRouter = router({
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const doc = await ctx.db.doc.findUniqueOrThrow({ where: { id: input.id } });
+      await assertProjectMember(ctx.db, doc.projectId, ctx.user.id);
       return toDocResponse(doc);
     }),
 
@@ -70,6 +74,8 @@ export const docRouter = router({
     .mutation(async ({ ctx, input }) =>
       runOrQueue(ctx, "doc.update", input, async () => {
         const { id, content, ...rest } = input;
+        const existing = await ctx.db.doc.findUniqueOrThrow({ where: { id } });
+        await assertProjectMember(ctx.db, existing.projectId, ctx.user.id);
         const parsed = content !== undefined ? parseMarkdown(content) : {};
         const doc = await ctx.db.doc.update({ where: { id }, data: { ...rest, ...parsed } });
         return toDocResponse(doc);
