@@ -52,12 +52,6 @@ export function ChatRightSidebar({ onClose }: { onClose?: () => void }) {
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex items-center gap-1.5 border-b px-3 py-2">
-        <Input
-          placeholder="Search people…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="h-7 flex-1 text-xs"
-        />
         {onClose && (
           <Button
             variant="ghost"
@@ -68,6 +62,12 @@ export function ChatRightSidebar({ onClose }: { onClose?: () => void }) {
             <PanelRightClose className="size-4" />
           </Button>
         )}
+        <Input
+          placeholder="Search people…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="h-7 flex-1 text-xs"
+        />
       </div>
       <div className="flex-1 overflow-y-auto px-1.5 pb-2">
         {recent.length > 0 && (
