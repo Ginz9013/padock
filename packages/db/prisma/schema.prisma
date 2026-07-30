@@ -32,6 +32,8 @@ model User {
   createdTopics    Topic[]
   sentMessages     ChatMessage[] @relation("ChatMessageSender")
   receivedMessages ChatMessage[] @relation("ChatMessageRecipient")
+  ownedApprovalRequests   ApprovalRequest[] @relation("ApprovalRequestOwner")
+  decidedApprovalRequests ApprovalRequest[] @relation("ApprovalRequestDecider")
 
   @@unique([email])
   @@map("user")
@@ -312,4 +314,36 @@ model ChatMessage {
   @@index([channelId])
   @@index([topicId])
   @@map("chat_message")
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+// Phase 6b: a queued write from an "unattended" PAT. `path` is the
+// dot-joined tRPC procedure path (e.g. "task.updateState"), `input` is
+// the already-zod-validated call input, stored verbatim for replay via
+// appRouter.createCaller. Runs as the *key owner* (userId), reviewed by
+// a different human (decidedById) — single-tenant, so any org member
+// can approve, matching the no-per-resource-membership precedent
+// elsewhere (channels, chat).
+model ApprovalRequest {
+  id          String         @id @default(cuid())
+  userId      String
+  user        User           @relation("ApprovalRequestOwner", fields: [userId], references: [id])
+  path        String
+  input       Json
+  status      ApprovalStatus @default(pending)
+  result      Json?
+  decidedById String?
+  decidedBy   User?          @relation("ApprovalRequestDecider", fields: [decidedById], references: [id])
+  decidedAt   DateTime?
+  note        String?
+  createdAt   DateTime       @default(now())
+
+  @@index([userId])
+  @@index([status])
+  @@map("approval_request")
 }
