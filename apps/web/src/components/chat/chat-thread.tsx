@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { trpc } from "@/lib/trpc";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar } from "@/components/ui/avatar";
@@ -25,6 +26,11 @@ type IncomingChatMessage = ChatMessage & {
 
 type Target = { kind: "channel"; channelId: string } | { kind: "dm"; withUserId: string };
 
+// Consecutive messages from the same sender within this window are
+// grouped visually (avatar/name/timestamp shown once for the group)
+// instead of each message repeating its own header row.
+const GROUP_WINDOW_MS = 60_000;
+
 // Shared between the Dashboard's DM/org-wide-channel feed and a
 // project's chat panel (CONTEXT.md §5.1.9/§5.1.10) — same message
 // shape, same compose action, only the read/send target differs.
@@ -32,11 +38,16 @@ export function ChatThread({
   target,
   projectId,
   profiles,
+  header,
   onFocusInput,
 }: {
   target: Target;
   projectId?: string;
   profiles: Map<string, UserProfile>;
+  // Bar rendered above the scrollable message list, e.g. the DM/channel
+  // this thread belongs to. ChatThread only knows the raw target id, not
+  // the resolved display name/avatar, so the caller supplies the markup.
+  header?: ReactNode;
   // Fired when the compose box gains focus — the signal a caller can
   // use to mark this conversation read (e.g. clear an unread badge):
   // coming back to type a reply means the user has noticed whatever
@@ -114,28 +125,45 @@ export function ChatThread({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {header}
       <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-2.5 p-3">
-          {messages.map((message) => {
+        <div className="flex flex-col gap-1 p-3">
+          {messages.map((message, index) => {
+            const prev = messages[index - 1];
             const profile = profiles.get(message.senderId);
             const name = profile?.name ?? message.senderId;
+            const grouped =
+              !!prev &&
+              prev.senderId === message.senderId &&
+              new Date(message.createdAt).getTime() - new Date(prev.createdAt).getTime() <=
+                GROUP_WINDOW_MS;
+            const time = new Date(message.createdAt).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
             return (
               <div
                 key={message.id}
-                className="flex w-full items-start gap-2.5 rounded-md bg-muted/40 px-3 py-2"
+                className={cn(
+                  "group flex w-full items-start gap-2.5 rounded-md px-3 py-1.5 hover:bg-muted/40",
+                  !grouped && index !== 0 && "mt-2",
+                )}
               >
-                <Avatar userId={message.senderId} name={name} image={profile?.image} />
+                {grouped ? (
+                  <span className="w-8 shrink-0 pt-0.5 text-center text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                    {time}
+                  </span>
+                ) : (
+                  <Avatar userId={message.senderId} name={name} image={profile?.image} />
+                )}
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-sm font-medium">{name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(message.createdAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-sm whitespace-pre-wrap">{message.content}</p>
+                  {!grouped && (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-sm font-medium">{name}</span>
+                      <span className="text-xs text-muted-foreground">{time}</span>
+                    </div>
+                  )}
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                 </div>
               </div>
             );
@@ -146,7 +174,7 @@ export function ChatThread({
           <div ref={bottomRef} />
         </div>
       </div>
-      <div className="flex gap-2 border-t p-2">
+      <div className="flex items-end gap-2 border-t px-3 pt-3 pb-2">
         <Textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -158,7 +186,7 @@ export function ChatThread({
           }}
           onFocus={onFocusInput}
           placeholder="Write a message… (Ctrl+Enter to send)"
-          className="min-h-9 flex-1 resize-none"
+          className="min-h-9 flex-1 resize-none rounded-lg border-none bg-muted px-2.5 py-2 shadow-none focus-visible:ring-0"
           rows={1}
         />
         <Button onClick={send} disabled={sending || !draft.trim()}>
