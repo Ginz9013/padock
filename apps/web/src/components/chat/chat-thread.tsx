@@ -60,6 +60,15 @@ export function ChatThread({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Defaults to the Windows/Linux label for a stable SSR render, then
+  // flips to the Mac symbol post-mount once `navigator` is available.
+  const [sendShortcutLabel, setSendShortcutLabel] = useState("Ctrl");
+  useEffect(() => {
+    if (/Mac|iPhone|iPad/.test(navigator.platform)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSendShortcutLabel("⌘");
+    }
+  }, []);
 
   const targetKey = target.kind === "channel" ? target.channelId : target.withUserId;
 
@@ -179,13 +188,14 @@ export function ChatThread({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && e.ctrlKey) {
+            // Ctrl+Enter on Windows/Linux, Cmd+Enter on Mac.
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
               send();
             }
           }}
           onFocus={onFocusInput}
-          placeholder="Write a message… (Ctrl+Enter to send)"
+          placeholder={`Write a message… (${sendShortcutLabel}+Enter to send)`}
           className="min-h-9 flex-1 resize-none rounded-lg border-none bg-muted px-2.5 py-2 shadow-none focus-visible:ring-0"
           rows={1}
         />
