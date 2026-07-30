@@ -31,6 +31,10 @@ type ChatSidebarValue = {
   profiles: Map<string, UserProfile>;
   isUnread: (key: string) => boolean;
   markRead: (key: string) => void;
+  // Latest known message timestamp (ISO string) per conversation key —
+  // the same recency data `isUnread` is built on, exposed so the
+  // sidebar's Recent section can sort people by it directly.
+  latestMessageAt: Record<string, string>;
   selectConversation: (c: Conversation) => void;
   // Opens (or starts) a DM with this user. Called from the org-wide
   // right sidebar, which — unlike ChatThread — is mounted on every
@@ -58,7 +62,7 @@ export function ChatSidebarProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const profiles = useUserProfiles();
-  const { noteLatest, markRead, isUnread } = useUnread();
+  const { noteLatest, markRead, isUnread, latest } = useUnread();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [people, setPeople] = useState<OrgUser[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
@@ -104,18 +108,22 @@ export function ChatSidebarProvider({ children }: { children: ReactNode }) {
           noteLatest(`channel:${message.channelId}`, message.createdAt);
           return;
         }
-        if (!meId || !message.recipientId || message.senderId === meId) return;
-        const counterpart = message.senderId;
+        if (!meId || !message.recipientId) return;
+        const counterpart = message.senderId === meId ? message.recipientId : message.senderId;
         const key = `dm:${counterpart}`;
+        // Noted regardless of direction — the Recent list needs to
+        // reflect a DM you just *sent*, not only ones you received.
         noteLatest(key, message.createdAt);
-        setConversations((prev) =>
-          prev.some((c) => c.key === key)
-            ? prev
-            : [
-                { kind: "dm", key, withUserId: counterpart, label: profiles.get(counterpart)?.name ?? counterpart },
-                ...prev,
-              ],
-        );
+        if (message.senderId !== meId) {
+          setConversations((prev) =>
+            prev.some((c) => c.key === key)
+              ? prev
+              : [
+                  { kind: "dm", key, withUserId: counterpart, label: profiles.get(counterpart)?.name ?? counterpart },
+                  ...prev,
+                ],
+          );
+        }
       },
       [meId, noteLatest, profiles],
     ),
@@ -146,7 +154,17 @@ export function ChatSidebarProvider({ children }: { children: ReactNode }) {
 
   return (
     <ChatSidebarContext.Provider
-      value={{ conversations, people, selected, profiles, isUnread, markRead, selectConversation, openDm }}
+      value={{
+        conversations,
+        people,
+        selected,
+        profiles,
+        isUnread,
+        markRead,
+        latestMessageAt: latest,
+        selectConversation,
+        openDm,
+      }}
     >
       {children}
     </ChatSidebarContext.Provider>

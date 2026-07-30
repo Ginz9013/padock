@@ -43,5 +43,8 @@ export function useUnread() {
     [latest, lastRead],
   );
 
-  return { noteLatest, markRead, isUnread };
+  // `latest` itself is exposed too — the chat sidebar's Recent section
+  // sorts people by this same "last known message" timestamp rather
+  // than duplicating a second recency tracker.
+  return { noteLatest, markRead, isUnread, latest };
 }
