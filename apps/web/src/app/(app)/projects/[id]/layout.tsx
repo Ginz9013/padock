@@ -29,7 +29,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
         <h1 className="font-heading text-2xl font-semibold">{project?.name ?? "Project"}</h1>
       </div>
       <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1 overflow-y-auto pr-4">{children}</div>
+        <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
       </div>
     </div>
   );

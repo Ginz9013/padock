@@ -121,7 +121,7 @@ export default function ProjectOverviewPage() {
   }
 
   return (
-    <div className="flex max-w-2xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <div>
         <h2 className="text-sm font-medium text-muted-foreground">Project info</h2>
         <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
@@ -134,16 +134,36 @@ export default function ProjectOverviewPage() {
         </dl>
       </div>
 
+      {error && (
+        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {error}
+        </p>
+      )}
+
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-muted-foreground">Labels</h2>
+          <NewLabelForm onCreate={createLabel} />
+        </div>
+        {labels.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No labels.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {labels.map((l) => (
+              <LabelBadge key={l.id} label={l} onRemove={() => deleteLabel(l.id)} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Membership management stays last — the most consequential
+          section (admin/remove) belongs at the bottom, below lighter-
+          weight settings like Labels. */}
       <div>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-medium text-muted-foreground">Members</h2>
           {isAdmin && <AddMemberSearch users={addableUsers} onAdd={(userId) => setRole(userId, "member")} />}
         </div>
-        {error && (
-          <p className="mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {error}
-          </p>
-        )}
         {members.length === 0 ? (
           <p className="text-xs text-muted-foreground">No members.</p>
         ) : (
@@ -191,22 +211,6 @@ export default function ProjectOverviewPage() {
               );
             })}
           </ul>
-        )}
-      </div>
-
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-muted-foreground">Labels</h2>
-          <NewLabelForm onCreate={createLabel} />
-        </div>
-        {labels.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No labels.</p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {labels.map((l) => (
-              <LabelBadge key={l.id} label={l} onRemove={() => deleteLabel(l.id)} />
-            ))}
-          </div>
         )}
       </div>
     </div>
