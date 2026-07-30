@@ -12,7 +12,7 @@ export function registerChannelTools(server: McpServer, client: Client): void {
     {
       description: "Create a chat channel — org-wide, or scoped to a project.",
       inputSchema: {
-        name: z.string(),
+        title: z.string(),
         project: z.string().optional().describe("Project name or id — omit for an org-wide channel"),
       },
     },

@@ -6,11 +6,11 @@ export function registerChannelCommands(program: Command): void {
   const channel = program.command("channel");
 
   channel
-    .command("create <name>")
-    .option("--project <nameOrId>")
-    .action(async (name: string, opts: { project?: string }) => {
+    .command("create <title>")
+    .option("--project <nameOrId>", "omit for an org-wide channel")
+    .action(async (title: string, opts: { project?: string }) => {
       const client = createClient();
-      await run(() => createChannel(client, { name, project: opts.project }));
+      await run(() => createChannel(client, { title, project: opts.project }));
     });
 
   channel

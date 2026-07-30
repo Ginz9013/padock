@@ -11,11 +11,10 @@ export function registerChatTools(server: McpServer, client: Client): void {
     "chat_send",
     {
       description:
-        "Send a chat message — either a DM (`to`) or a channel message (`channel`+`topic`), never both. This is outward-facing: confirm with the user before calling it.",
+        "Send a chat message — either a DM (`to`) or a channel message (`channel`), never both. This is outward-facing: confirm with the user before calling it.",
       inputSchema: {
         to: z.string().optional().describe("DM recipient: email or name"),
-        channel: z.string().optional().describe("Channel name or id — requires topic"),
-        topic: z.string().optional().describe("Topic title or id within channel"),
+        channel: z.string().optional().describe("Channel name or id"),
         message: z.string(),
         project: z.string().optional().describe("DM only: tag the message with a project"),
       },
@@ -35,8 +34,8 @@ export function registerChatTools(server: McpServer, client: Client): void {
   server.registerTool(
     "chat_history",
     {
-      description: "Read the message history of a channel topic.",
-      inputSchema: { channel: z.string(), topic: z.string() },
+      description: "Read the message history of a channel.",
+      inputSchema: { channel: z.string() },
     },
     async (args) => toolResult(() => getChatHistory(client, args)),
   );

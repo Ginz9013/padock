@@ -7,17 +7,14 @@ export function registerChatCommands(program: Command): void {
 
   chat
     .command("send")
-    .option("--to <emailOrNameOrId>", "DM recipient — mutually exclusive with --channel/--topic")
-    .option("--channel <nameOrId>", "channel to post to — requires --topic")
-    .option("--topic <titleOrId>", "topic within --channel")
+    .option("--to <emailOrNameOrId>", "DM recipient — mutually exclusive with --channel")
+    .option("--channel <nameOrId>", "channel to post to")
     .requiredOption("--message <text>")
     .option("--project <nameOrId>", "DM only — tag the message with a project")
-    .action(
-      async (opts: { to?: string; channel?: string; topic?: string; message: string; project?: string }) => {
-        const client = createClient();
-        await run(() => sendMessage(client, opts));
-      },
-    );
+    .action(async (opts: { to?: string; channel?: string; message: string; project?: string }) => {
+      const client = createClient();
+      await run(() => sendMessage(client, opts));
+    });
 
   chat
     .command("conversation")
@@ -30,8 +27,7 @@ export function registerChatCommands(program: Command): void {
   chat
     .command("history")
     .requiredOption("--channel <nameOrId>")
-    .requiredOption("--topic <titleOrId>")
-    .action(async (opts: { channel: string; topic: string }) => {
+    .action(async (opts: { channel: string }) => {
       const client = createClient();
       await run(() => getChatHistory(client, opts));
     });
