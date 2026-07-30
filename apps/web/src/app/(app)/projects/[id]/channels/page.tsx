@@ -1,6 +1,5 @@
 // Placeholder route so the sidebar's Channels link resolves to a page —
-// the existing ChannelPanel is a persistent side panel, not a routable
-// page; this is scaffolding for a future dedicated channels view.
+// scaffolding for a future dedicated channels view.
 export default function ProjectChannelsPage() {
   return (
     <div className="flex flex-col gap-4">
