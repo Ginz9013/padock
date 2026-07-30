@@ -1,6 +1,6 @@
 # Padock — Core Concept
 
-> Status: v0.7 — Phase 0 through 6b shipped (platform skeleton → thin vertical slice → CLI → universal Skill → deepened domains → MCP transport → PAT granular scopes → approval queue for unattended agents). The §8 north-star scenario runs end-to-end for both interactive and non-interactive agents. Remaining work is explicitly deferred, not blocking (§7) — see §9 for the full phase-by-phase record. Update this file as decisions solidify; do not let it drift from reality.
+> Status: v0.7 — Phase 0 through 7 shipped (platform skeleton → thin vertical slice → CLI → universal Skill → deepened domains → MCP transport → PAT granular scopes → approval queue for unattended agents → web UI shell). The §8 north-star scenario runs end-to-end for both interactive and non-interactive agents via CLI/MCP. Phase 7 gave the web app a real entry point (landing page, login/register, authenticated shell) but chat/task/doc domains still have no web UI — `/dashboard` is a placeholder (§5.1.8). Remaining work is explicitly deferred, not blocking (§7) — see §9 for the full phase-by-phase record. Update this file as decisions solidify; do not let it drift from reality.
 
 ## 1. One-liner
 
@@ -164,6 +164,16 @@ Replaces Phase 1's plain-Markdown-text storage, per the migration §5.1.3 always
 - **Round-tripping is structurally, not byte-for-byte, identical.** `remark-stringify` normalizes on the way back out — e.g. `-` bullets become `*`, a trailing newline gets added. Content and meaning are unchanged; exact source bytes are not preserved. This is a real, observed deviation from what the original Phase 1 wording ("agents will keep consuming readable text either way") implied, not a defect — no agent or human reading either version would notice a semantic difference, but it's worth being precise that it isn't a lossless byte-identity guarantee.
 - **No custom block types, no CRDT.** Both stay exactly as scoped: a future editor UI needing block types beyond what Markdown expresses would be an additive schema extension on top of mdast, not a reason to have built a bespoke schema now; CRDT/multi-user co-editing remains deferred per §6.
 
+### 5.1.8 Web UI: public shell, auth flow, authenticated shell (Phase 7, confirmed)
+
+Phase 7 built the first real (non-debug) web UI, replacing the Phase 0 debug homepage and giving the product an actual entry point:
+
+- **Landing page** (`/`) — public, unauthenticated entry page with sign-up/log-in CTAs, replacing the Phase 0 debug page.
+- **Auth pages** (`/login`, `/register`) — built on the Better Auth React client (`authClient`/`useSession`/`signIn`/`signUp`/`signOut`, `apps/web/src/lib/auth-client.ts`), paired with the shadcn/ui `<Form>` (react-hook-form + zod) adopted as the standing convention (§6, "UI component library").
+- **Route protection lives in `proxy.ts`, not page rendering mode** — confirms the §6 "Rendering model" decision. `apps/web/proxy.ts` checks only whether a session cookie is present (`getSessionCookie`, no DB hit) and redirects: signed-in users away from `/`, `/login`, `/register` toward `/dashboard`; signed-out users away from `/dashboard`, `/approvals` toward `/login`. This is a UX redirect only — real authorization still happens server-side per tRPC call (`resolveIdentity`), unchanged since Phase 0.
+- **Authenticated app shell** — `(app)/layout.tsx` adds a persistent header (nav links to Dashboard/Approvals, signed-in user's email, sign-out) wrapping both pages. `/approvals` (Phase 6b) now lives inside this shell instead of standing alone.
+- **`/dashboard` is a placeholder, not a real page** — it renders a welcome message and the literal text "Chat, tasks, and docs will live here." No chat/task/doc web UI exists yet; those three domains remain **CLI/MCP-only** (see §7).
+
 ### 5.2 Padock CLI
 
 The actual engine that agents drive. One consistent command grammar across all three domains, e.g.:
@@ -230,6 +240,7 @@ The CLI is the single implementation of "how to talk to Padock." Everything abov
 - **Finer-grained PAT scopes** (per-project, per-action-verb beyond read/write): Phase 6 shipped per-domain read/write only. Revisit if a real use case needs narrower slicing (e.g. a key scoped to one specific project, not the whole `task`/`doc` domain).
 - **Approval queue notifications/expiry**: Phase 6b's `/approvals` page is pull-only (a human has to go check it) — no push notification (email/chat ping) when something new is queued, and no expiry/TTL on a pending request that never gets decided. Revisit if the queue sees real volume and pull-only proves insufficient.
 - **Enterprise directory login (LDAP/AD)**: no official Better Auth LDAP plugin exists (§5.1.1). Near-term path is the SSO plugin (SAML/OIDC) fronting the directory via an IdP; revisit raw LDAP bind only if a real deployment proves the SSO path insufficient.
+- **Chat/task/doc web UI**: Phase 7 shipped auth (landing/login/register) and an authenticated app shell only (§5.1.8); `/dashboard` is a placeholder. Chat, tasks, and docs have no web views — CLI/MCP are the only interface for those three domains today. Not blocking (§8's north star already runs end-to-end via CLI/MCP), but a real gap for any non-technical user who isn't running an agent/CLI. Revisit as its own phase once there's a concrete need for humans to use those domains directly in the browser.
 
 ## 8. Example end-to-end flow (north star scenario)
 
@@ -255,6 +266,7 @@ Build a thin walking skeleton across all three domains first, validate the flow 
 5. **Phase 4 — Deepen each domain** — **done**: channels/threads for chat (§5.1.4), configurable workflows for tasks (§5.1.5), block-based doc storage (§5.1.7), plus the switch to `prisma migrate` (§5.1.6) that came out of doing this with live dogfood data. Sequenced one slice at a time rather than simultaneously, per this session's choice.
 6. **Phase 5 — Optional richer transport & marketplace distribution**: MCP server wrapper (`padock mcp serve`) — **done**, §5.3. Publishing to agentskills.io/an official marketplace is still open — a human/business decision, not engineering work.
 7. **Phase 6 — Non-interactive agents & fine-grained permissions** — **done**: PAT granular scopes (per-domain read/write, §5.1.1/§6, Phase 6) and a server-side approval queue for unattended/scheduled agents (§5.1.1/§6, Phase 6b) — both shipped. Notifications/expiry on the approval queue remain open (§7), not blocking.
+8. **Phase 7 — Web UI shell** — **done**: landing page, login/register auth flow, `proxy.ts` route protection, authenticated app shell wrapping `/dashboard` (placeholder) and `/approvals` (§5.1.8). Chat/task/doc web views are still not built — those domains remain CLI/MCP-only (§7).
 
 ## 10. Non-goals (v1)
 
