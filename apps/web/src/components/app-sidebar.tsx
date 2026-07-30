@@ -3,10 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { PanelLeftClose, Pin, PinOff, Plus } from "lucide-react";
+import {
+  ChevronRight,
+  FileText,
+  Hash,
+  Layers,
+  ListChecks,
+  PanelLeftClose,
+  Pin,
+  PinOff,
+  Plus,
+} from "lucide-react";
 
 import { trpc } from "@/lib/trpc";
 import { usePinnedProjects } from "@/lib/use-pinned-projects";
+import { useExpandedProjects } from "@/lib/use-expanded-projects";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +32,18 @@ import {
 
 type Project = { id: string; name: string };
 
+// Each project's sub-nav (Plane's per-project sidebar tree is the
+// reference): Tasks is the project root route, the rest are nested
+// segments. Modules and Channels don't have real pages yet — this is
+// sidebar scaffolding ahead of those features, same as Docs was before
+// it had content.
+const PROJECT_SUB_NAV = [
+  { label: "Tasks", segment: "", icon: ListChecks },
+  { label: "Modules", segment: "modules", icon: Layers },
+  { label: "Docs", segment: "docs", icon: FileText },
+  { label: "Channels", segment: "channels", icon: Hash },
+] as const;
+
 // Persistent project nav (CONTEXT.md §5's UX shell): a project list
 // and Approvals. Shaped after ChatRightSidebar (this session's UX
 // decision): resizable-by-drag and collapsible via a toggle button in
@@ -34,6 +57,7 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const [projects, setProjects] = useState<Project[]>([]);
   const { isPinned, togglePin } = usePinnedProjects();
+  const { isExpanded, toggleExpanded } = useExpandedProjects();
 
   async function refreshProjects() {
     setProjects(await trpc.project.list.query());
@@ -68,8 +92,12 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
               <ProjectRow
                 key={project.id}
                 project={project}
-                active={pathname.startsWith(`/projects/${project.id}`)}
+                pathname={pathname}
                 pinned
+                expanded={isExpanded(project.id, pathname.startsWith(`/projects/${project.id}`))}
+                onToggleExpand={() =>
+                  toggleExpanded(project.id, pathname.startsWith(`/projects/${project.id}`))
+                }
                 onTogglePin={() => togglePin(project.id)}
               />
             ))}
@@ -84,8 +112,12 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
           <ProjectRow
             key={project.id}
             project={project}
-            active={pathname.startsWith(`/projects/${project.id}`)}
+            pathname={pathname}
             pinned={false}
+            expanded={isExpanded(project.id, pathname.startsWith(`/projects/${project.id}`))}
+            onToggleExpand={() =>
+              toggleExpanded(project.id, pathname.startsWith(`/projects/${project.id}`))
+            }
             onTogglePin={() => togglePin(project.id)}
           />
         ))}
@@ -135,41 +167,80 @@ function SidebarLink({
 
 function ProjectRow({
   project,
-  active,
+  pathname,
   pinned,
+  expanded,
+  onToggleExpand,
   onTogglePin,
 }: {
   project: Project;
-  active: boolean;
+  pathname: string;
   pinned: boolean;
+  expanded: boolean;
+  onToggleExpand: () => void;
   onTogglePin: () => void;
 }) {
+  const base = `/projects/${project.id}`;
+  const active = pathname.startsWith(base);
+  const activeSegment = active ? (pathname.slice(base.length).split("/")[1] ?? "") : null;
+
   return (
-    <div
-      className={cn(
-        "group flex items-center rounded-md hover:bg-sidebar-accent",
-        active && "bg-sidebar-accent",
+    <div>
+      <div
+        className={cn(
+          "group flex items-center rounded-md hover:bg-sidebar-accent",
+          active && "bg-sidebar-accent",
+        )}
+      >
+        <button
+          onClick={onToggleExpand}
+          className="shrink-0 p-1.5 text-sidebar-foreground/50 hover:text-sidebar-foreground"
+          aria-label={expanded ? "Collapse project" : "Expand project"}
+        >
+          <ChevronRight className={cn("size-3.5 transition-transform", expanded && "rotate-90")} />
+        </button>
+        <Link
+          href={base}
+          className={cn(
+            "min-w-0 flex-1 truncate py-1.5 pr-2 text-sm text-sidebar-foreground/70",
+            active && "font-medium text-sidebar-foreground",
+          )}
+        >
+          {project.name}
+        </Link>
+        <button
+          onClick={onTogglePin}
+          className={cn(
+            "mr-1.5 shrink-0 text-sidebar-foreground/50 opacity-0 hover:text-sidebar-foreground group-hover:opacity-100",
+            pinned && "opacity-100",
+          )}
+          aria-label={pinned ? "Unpin project" : "Pin project"}
+        >
+          {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="ml-4 flex flex-col border-l pl-2">
+          {PROJECT_SUB_NAV.map(({ label, segment, icon: Icon }) => {
+            const href = segment ? `${base}/${segment}` : base;
+            const subActive = activeSegment === segment;
+            return (
+              <Link
+                key={segment}
+                href={href}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                  subActive && "bg-sidebar-accent font-medium text-sidebar-foreground",
+                )}
+              >
+                <Icon className="size-3.5 shrink-0" />
+                {label}
+              </Link>
+            );
+          })}
+        </div>
       )}
-    >
-      <Link
-        href={`/projects/${project.id}`}
-        className={cn(
-          "min-w-0 flex-1 truncate px-2 py-1.5 text-sm text-sidebar-foreground/70",
-          active && "font-medium text-sidebar-foreground",
-        )}
-      >
-        {project.name}
-      </Link>
-      <button
-        onClick={onTogglePin}
-        className={cn(
-          "mr-1.5 shrink-0 text-sidebar-foreground/50 opacity-0 hover:text-sidebar-foreground group-hover:opacity-100",
-          pinned && "opacity-100",
-        )}
-        aria-label={pinned ? "Unpin project" : "Pin project"}
-      >
-        {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-      </button>
     </div>
   );
 }
