@@ -33,6 +33,8 @@ model User {
   receivedMessages ChatMessage[] @relation("ChatMessageRecipient")
   ownedApprovalRequests   ApprovalRequest[] @relation("ApprovalRequestOwner")
   decidedApprovalRequests ApprovalRequest[] @relation("ApprovalRequestDecider")
+  createdProjects    Project[]
+  projectMemberships ProjectMember[]
 
   @@unique([email])
   @@map("user")
@@ -167,12 +169,15 @@ model Apikey {
 // Cross-domain anchor per CONTEXT.md §5.1.2: tasks and docs (Phase 1)
 // will require a projectId; chat messages will tag it optionally.
 model Project {
-  id             String       @id @default(cuid())
+  id             String          @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name           String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdById    String?
+  createdBy      User?           @relation(fields: [createdById], references: [id])
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  members        ProjectMember[]
   tasks          Task[]
   taskStates     TaskState[]
   docs           Doc[]
@@ -181,6 +186,32 @@ model Project {
 
   @@index([organizationId])
   @@map("project")
+}
+
+// Access control layer for Projects: only a project's ProjectMembers can
+// see or act on it (enforced in the API layer, not here — this migration
+// only adds the schema + backfills existing data so nothing gets locked
+// out; per-router membership checks are a separate, deferred pass).
+// `role` is independent of the org-level `Member.role` (Better Auth's
+// Organization plugin) — being an org admin does not imply project admin.
+enum ProjectMemberRole {
+  admin
+  member
+}
+
+model ProjectMember {
+  id        String            @id @default(cuid())
+  projectId String
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      ProjectMemberRole @default(member)
+  createdAt DateTime          @default(now())
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_member")
 }
 
 // Plane-style configurable workflow (CONTEXT.md §5.1.5): each project

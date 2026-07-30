@@ -24,7 +24,14 @@ export const projectRouter = router({
       runOrQueue(ctx, "project.create", input, async () => {
         const org = await ctx.db.organization.findFirstOrThrow();
         const project = await ctx.db.project.create({
-          data: { name: input.name, organizationId: org.id },
+          data: {
+            name: input.name,
+            organizationId: org.id,
+            createdById: ctx.user.id,
+            members: {
+              create: { userId: ctx.user.id, role: "admin" },
+            },
+          },
         });
         await ctx.db.taskState.createMany({
           data: DEFAULT_TASK_STATES.map((s, position) => ({
@@ -49,7 +56,14 @@ export const projectRouter = router({
       }),
     ),
 
+  // Only returns projects the caller is a ProjectMember of (§7-deferred:
+  // the same membership check still needs adding to task/doc/channel/chat
+  // routers so a non-member can't reach a hidden project's data directly
+  // by id — this pass only covers the project list itself).
   list: scopedProcedure("project", "read").query(async ({ ctx }) => {
-    return ctx.db.project.findMany({ orderBy: { createdAt: "desc" } });
+    return ctx.db.project.findMany({
+      where: { members: { some: { userId: ctx.user.id } } },
+      orderBy: { createdAt: "desc" },
+    });
   }),
 });
