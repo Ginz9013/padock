@@ -1,5 +1,5 @@
 import type { createClient } from "../client.ts";
-import { resolveProjectId, resolveTaskStateId, resolveUserId } from "../resolve.ts";
+import { resolveProjectId, resolveTaskStateId, resolveUserId, resolveLabelId } from "../resolve.ts";
 
 type Client = ReturnType<typeof createClient>;
 
@@ -81,4 +81,10 @@ export async function updateTaskDates(
 export async function updateTaskAssignees(client: Client, args: { id: string; assignees: string[] }) {
   const assigneeUserIds = await resolveAssigneeUserIds(client, args.assignees);
   return client.task.updateAssignees.mutate({ id: args.id, assigneeUserIds: assigneeUserIds ?? [] });
+}
+
+export async function updateTaskLabels(client: Client, args: { id: string; labels: string[] }) {
+  const existing = await client.task.get.query({ id: args.id });
+  const labelIds = await Promise.all(args.labels.map((l) => resolveLabelId(client, existing.projectId, l)));
+  return client.task.updateLabels.mutate({ id: args.id, labelIds });
 }

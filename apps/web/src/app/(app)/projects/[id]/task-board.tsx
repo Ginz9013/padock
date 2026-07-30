@@ -5,6 +5,7 @@ import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSe
 import type { DragEndEvent } from "@dnd-kit/core";
 
 import { Badge } from "@/components/ui/badge";
+import { LabelBadge } from "./label-badge";
 import type { Task, TaskState } from "./task-types";
 
 // Click-and-drag panning for the horizontal scroll area, since the
@@ -152,6 +153,13 @@ function BoardCard({ task, onOpenTask }: { task: Task; onOpenTask: (taskId: stri
     >
       <p className="truncate text-sm">{task.title}</p>
       {task.description && <p className="truncate text-xs text-muted-foreground">{task.description}</p>}
+      {task.labels.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {task.labels.map((l) => (
+            <LabelBadge key={l.id} label={l.label} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

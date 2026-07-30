@@ -9,6 +9,7 @@ import {
   updateTaskPriority,
   updateTaskDates,
   updateTaskAssignees,
+  updateTaskLabels,
 } from "../../actions/task.ts";
 import { toolResult } from "../toolResult.ts";
 
@@ -96,5 +97,17 @@ export function registerTaskTools(server: McpServer, client: Client): void {
       },
     },
     async (args) => toolResult(() => updateTaskAssignees(client, args)),
+  );
+
+  server.registerTool(
+    "task_set_labels",
+    {
+      description: "Replace a task's full label list. Labels must already exist in the task's project.",
+      inputSchema: {
+        id: z.string(),
+        labels: z.array(z.string()).describe("Label names or ids"),
+      },
+    },
+    async (args) => toolResult(() => updateTaskLabels(client, args)),
   );
 }

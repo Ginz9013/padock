@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { UserMinus } from "lucide-react";
+import { UserMinus, X } from "lucide-react";
 
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/lib/auth-client";
@@ -16,6 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { LABEL_COLORS } from "../task-types";
+import type { ProjectLabel } from "../task-types";
+import { LabelBadge } from "../label-badge";
+import { cn } from "@/lib/utils";
 
 type Project = { id: string; name: string; createdAt: string };
 type ProjectRole = "admin" | "member";
@@ -38,18 +42,21 @@ export default function ProjectOverviewPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [orgUsers, setOrgUsers] = useState<OrgUser[]>([]);
+  const [labels, setLabels] = useState<ProjectLabel[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function refresh() {
     try {
-      const [projects, memberList, users] = await Promise.all([
+      const [projects, memberList, users, labelList] = await Promise.all([
         trpc.project.list.query(),
         trpc.project.listMembers.query({ projectId }),
         trpc.user.list.query(),
+        trpc.label.list.query({ projectId }),
       ]);
       setProject((projects as Project[]).find((p) => p.id === projectId) ?? null);
       setMembers(memberList as ProjectMember[]);
       setOrgUsers(users as OrgUser[]);
+      setLabels(labelList);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load project");
@@ -82,6 +89,26 @@ export default function ProjectOverviewPage() {
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove member");
+    }
+  }
+
+  async function createLabel(name: string, color: string) {
+    setError(null);
+    try {
+      await trpc.label.create.mutate({ projectId, name, color });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create label");
+    }
+  }
+
+  async function deleteLabel(id: string) {
+    setError(null);
+    try {
+      await trpc.label.delete.mutate({ id });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete label");
     }
   }
 
@@ -166,6 +193,22 @@ export default function ProjectOverviewPage() {
           </ul>
         )}
       </div>
+
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-muted-foreground">Labels</h2>
+          <NewLabelForm onCreate={createLabel} />
+        </div>
+        {labels.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No labels.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {labels.map((l) => (
+              <LabelBadge key={l.id} label={l} onRemove={() => deleteLabel(l.id)} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -216,6 +259,65 @@ function AddMemberSearch({ users, onAdd }: { users: OrgUser[]; onAdd: (userId: s
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// Inline popover form — a name field plus a fixed swatch picker (no
+// free-form color input, keeps every label visually consistent).
+function NewLabelForm({ onCreate }: { onCreate: (name: string, color: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [color, setColor] = useState<string>(LABEL_COLORS[0]);
+
+  function submit() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onCreate(trimmed, color);
+    setName("");
+    setColor(LABEL_COLORS[0]);
+    setOpen(false);
+  }
+
+  if (!open) {
+    return (
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+        Add label
+      </Button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 rounded-md border bg-popover p-2 shadow-sm">
+      <Input
+        placeholder="Label name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && submit()}
+        autoFocus
+        className="h-7 w-36"
+      />
+      <div className="flex items-center gap-1">
+        {LABEL_COLORS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => setColor(c)}
+            aria-label={`Color ${c}`}
+            className={cn(
+              "size-4 rounded-full ring-offset-1 ring-offset-background",
+              color === c && "ring-2 ring-foreground",
+            )}
+            style={{ backgroundColor: c }}
+          />
+        ))}
+      </div>
+      <Button size="sm" onClick={submit} disabled={!name.trim()}>
+        Add
+      </Button>
+      <Button size="icon-sm" variant="ghost" onClick={() => setOpen(false)} aria-label="Cancel">
+        <X className="size-3.5" />
+      </Button>
     </div>
   );
 }

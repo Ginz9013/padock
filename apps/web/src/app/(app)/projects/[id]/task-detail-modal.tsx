@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PRIORITIES } from "./task-types";
-import type { ProjectMemberSummary, Task, TaskPriority, TaskState } from "./task-types";
+import type { ProjectLabel, ProjectMemberSummary, Task, TaskPriority, TaskState } from "./task-types";
+import { LabelBadge } from "./label-badge";
 
 // Single place every view (List/Board/Table/Calendar/Timeline) opens to
 // edit a task — clicking a task anywhere always opens this instead of
@@ -22,12 +23,14 @@ export function TaskDetailModal({
   task,
   states,
   members,
+  labels,
   onClose,
   onChanged,
 }: {
   task: Task | null;
   states: TaskState[];
   members: ProjectMemberSummary[];
+  labels: ProjectLabel[];
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
@@ -37,7 +40,7 @@ export function TaskDetailModal({
         {task && (
           // Keyed on task.id so switching tasks remounts the form fresh
           // instead of syncing local edit state from props via an effect.
-          <TaskDetailForm key={task.id} task={task} states={states} members={members} onChanged={onChanged} />
+          <TaskDetailForm key={task.id} task={task} states={states} members={members} labels={labels} onChanged={onChanged} />
         )}
       </DialogContent>
     </Dialog>
@@ -48,11 +51,13 @@ function TaskDetailForm({
   task,
   states,
   members,
+  labels,
   onChanged,
 }: {
   task: Task;
   states: TaskState[];
   members: ProjectMemberSummary[];
+  labels: ProjectLabel[];
   onChanged: () => Promise<void>;
 }) {
   const [title, setTitle] = useState(task.title);
@@ -100,8 +105,23 @@ function TaskDetailForm({
     await onChanged();
   }
 
+  async function addLabel(labelId: string) {
+    const labelIds = [...task.labels.map((l) => l.labelId), labelId];
+    await trpc.task.updateLabels.mutate({ id: task.id, labelIds });
+    await onChanged();
+  }
+
+  async function removeLabel(labelId: string) {
+    const labelIds = task.labels.map((l) => l.labelId).filter((id) => id !== labelId);
+    await trpc.task.updateLabels.mutate({ id: task.id, labelIds });
+    await onChanged();
+  }
+
   const assignedUserIds = new Set(task.assignees.map((a) => a.projectMember.userId));
   const assignableMembers = members.filter((m) => !assignedUserIds.has(m.userId));
+
+  const assignedLabelIds = new Set(task.labels.map((l) => l.labelId));
+  const assignableLabels = labels.filter((l) => !assignedLabelIds.has(l.id));
 
   return (
     <div className="flex flex-col gap-4">
@@ -202,6 +222,32 @@ function TaskDetailForm({
               {assignableMembers.map((m) => (
                 <SelectItem key={m.id} value={m.userId}>
                   {m.user.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      <div>
+        <Label className="mb-1 text-xs text-muted-foreground">Labels</Label>
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {task.labels.length === 0 && <p className="text-xs text-muted-foreground">No labels.</p>}
+          {task.labels.map((l) => (
+            <LabelBadge key={l.id} label={l.label} onRemove={() => removeLabel(l.labelId)} />
+          ))}
+        </div>
+        {assignableLabels.length > 0 && (
+          // The catalog itself (creating/deleting labels) is managed on the
+          // Overview page — here a task can only attach/detach from it.
+          <Select value="" onValueChange={addLabel}>
+            <SelectTrigger size="sm" className="w-full">
+              <SelectValue placeholder="Add a label…" />
+            </SelectTrigger>
+            <SelectContent>
+              {assignableLabels.map((l) => (
+                <SelectItem key={l.id} value={l.id}>
+                  {l.name}
                 </SelectItem>
               ))}
             </SelectContent>

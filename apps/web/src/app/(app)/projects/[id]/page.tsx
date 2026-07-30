@@ -30,7 +30,8 @@ import { TaskTable } from "./task-table";
 import { TaskCalendar } from "./task-calendar";
 import { TaskTimeline } from "./task-timeline";
 import { TaskDetailModal } from "./task-detail-modal";
-import type { ProjectMemberSummary, Task, TaskPriority, TaskState } from "./task-types";
+import { LabelBadge } from "./label-badge";
+import type { ProjectLabel, ProjectMemberSummary, Task, TaskPriority, TaskState } from "./task-types";
 
 const VIEWS = [
   { key: "list", label: "List" },
@@ -57,17 +58,20 @@ export default function ProjectTaskPage() {
   const [states, setStates] = useState<TaskState[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [members, setMembers] = useState<ProjectMemberSummary[]>([]);
+  const [labels, setLabels] = useState<ProjectLabel[]>([]);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
 
   async function refresh() {
-    const [stateList, taskList, memberList] = await Promise.all([
+    const [stateList, taskList, memberList, labelList] = await Promise.all([
       trpc.taskState.list.query({ projectId }),
       trpc.task.list.query({ projectId }),
       trpc.project.listMembers.query({ projectId }),
+      trpc.label.list.query({ projectId }),
     ]);
     setStates([...stateList].sort((a, b) => a.position - b.position));
     setTasks(taskList);
     setMembers(memberList);
+    setLabels(labelList);
   }
 
   useEffect(() => {
@@ -132,6 +136,7 @@ export default function ProjectTaskPage() {
         task={tasks.find((t) => t.id === openTaskId) ?? null}
         states={states}
         members={members}
+        labels={labels}
         onClose={() => setOpenTaskId(null)}
         onChanged={refresh}
       />
@@ -199,6 +204,13 @@ function TaskListView({
                         <p className="truncate text-xs text-muted-foreground">
                           {task.description}
                         </p>
+                      )}
+                      {task.labels.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {task.labels.map((l) => (
+                            <LabelBadge key={l.id} label={l.label} />
+                          ))}
+                        </div>
                       )}
                     </button>
                     <Select value={task.stateId} onValueChange={(v) => onChangeState(task.id, v)}>

@@ -7,6 +7,7 @@ import { userRouter } from "./router/user.ts";
 import { searchRouter } from "./router/search.ts";
 import { channelRouter } from "./router/channel.ts";
 import { taskStateRouter } from "./router/taskState.ts";
+import { labelRouter } from "./router/label.ts";
 import { apikeyRouter } from "./router/apikey.ts";
 import { approvalRouter } from "./router/approval.ts";
 
@@ -26,6 +27,7 @@ export const appRouter = router({
   search: searchRouter,
   channel: channelRouter,
   taskState: taskStateRouter,
+  label: labelRouter,
   apikey: apikeyRouter,
   approval: approvalRouter,
 });

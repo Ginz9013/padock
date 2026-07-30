@@ -3,6 +3,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PRIORITIES } from "./task-types";
 import type { Task, TaskPriority, TaskState } from "./task-types";
+import { LabelBadge } from "./label-badge";
 
 function formatDate(value: string | null) {
   if (!value) return "—";
@@ -36,6 +37,7 @@ export function TaskTable({
             <th className="px-3 py-2 font-medium">Title</th>
             <th className="px-3 py-2 font-medium">State</th>
             <th className="px-3 py-2 font-medium">Priority</th>
+            <th className="px-3 py-2 font-medium">Labels</th>
             <th className="px-3 py-2 font-medium">Assignees</th>
             <th className="px-3 py-2 font-medium">Start</th>
             <th className="px-3 py-2 font-medium">End</th>
@@ -44,7 +46,7 @@ export function TaskTable({
         <tbody>
           {tasks.length === 0 ? (
             <tr>
-              <td colSpan={6} className="px-3 py-6 text-center text-xs text-muted-foreground">
+              <td colSpan={7} className="px-3 py-6 text-center text-xs text-muted-foreground">
                 No tasks.
               </td>
             </tr>
@@ -90,6 +92,17 @@ export function TaskTable({
                       ))}
                     </SelectContent>
                   </Select>
+                </td>
+                <td className="max-w-48 px-3 py-2">
+                  {task.labels.length === 0 ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {task.labels.map((l) => (
+                        <LabelBadge key={l.id} label={l.label} />
+                      ))}
+                    </div>
+                  )}
                 </td>
                 <td className="max-w-48 truncate px-3 py-2 text-muted-foreground">
                   {task.assignees.length === 0

@@ -35,3 +35,9 @@ export async function resolveTaskStateId(client: Client, projectId: string, name
   const match = states.find((s) => s.name.toLowerCase() === nameOrId.toLowerCase());
   return match ? match.id : nameOrId;
 }
+
+export async function resolveLabelId(client: Client, projectId: string, nameOrId: string): Promise<string> {
+  const labels = await client.label.list.query({ projectId });
+  const match = labels.find((l) => l.name.toLowerCase() === nameOrId.toLowerCase());
+  return match ? match.id : nameOrId;
+}

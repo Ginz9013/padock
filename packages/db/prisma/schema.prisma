@@ -180,6 +180,7 @@ model Project {
   members        ProjectMember[]
   tasks          Task[]
   taskStates     TaskState[]
+  labels         Label[]
   docs           Doc[]
   chatMessages   ChatMessage[]
   channels       Channel[]
@@ -266,6 +267,7 @@ model Task {
   startDate   DateTime?
   endDate     DateTime?
   assignees   TaskAssignee[]
+  labels      TaskLabel[]
   createdById String
   createdBy   User           @relation(fields: [createdById], references: [id])
   createdAt   DateTime       @default(now())
@@ -276,6 +278,41 @@ model Task {
   @@index([projectId, startDate])
   @@index([projectId, endDate])
   @@map("task")
+}
+
+// Plane-style project-scoped tag (CONTEXT.md §5.1's Label gap): a flat
+// name+color, no hierarchy — same "configurable set per project" shape as
+// TaskState, but without a group/position/isDefault since labels aren't a
+// workflow. `color` is a hex string the web UI renders as a dot/badge
+// background; the CLI/MCP just pass it through opaquely.
+model Label {
+  id        String      @id @default(cuid())
+  projectId String
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  color     String
+  createdAt DateTime    @default(now())
+  tasks     TaskLabel[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("label")
+}
+
+// Join table, same shape/precedent as TaskAssignee — "label must belong to
+// the task's own project" is an API-layer invariant, not a schema one.
+model TaskLabel {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  labelId   String
+  label     Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, labelId])
+  @@index([taskId])
+  @@index([labelId])
+  @@map("task_label")
 }
 
 // An assignee is a ProjectMember, not a bare User — being assignable to a

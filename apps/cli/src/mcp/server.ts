@@ -5,6 +5,7 @@ import { version } from "../../package.json";
 import { registerProjectTools } from "./tools/project.ts";
 import { registerTaskTools } from "./tools/task.ts";
 import { registerTaskStateTools } from "./tools/taskState.ts";
+import { registerLabelTools } from "./tools/label.ts";
 import { registerDocTools } from "./tools/doc.ts";
 import { registerChatTools } from "./tools/chat.ts";
 import { registerChannelTools } from "./tools/channel.ts";
@@ -24,6 +25,7 @@ export async function startMcpServer(): Promise<void> {
   registerProjectTools(server, client);
   registerTaskTools(server, client);
   registerTaskStateTools(server, client);
+  registerLabelTools(server, client);
   registerDocTools(server, client);
   registerChatTools(server, client);
   registerChannelTools(server, client);

@@ -8,6 +8,7 @@ import {
   updateTaskPriority,
   updateTaskDates,
   updateTaskAssignees,
+  updateTaskLabels,
 } from "../actions/task.ts";
 
 const PRIORITY_HELP = "urgent|high|medium|low|none";
@@ -104,5 +105,13 @@ export function registerTaskCommands(program: Command): void {
     .action(async (id: string, opts: { set: string }) => {
       const client = createClient();
       await run(() => updateTaskAssignees(client, { id, assignees: opts.set.split(",") }));
+    });
+
+  task
+    .command("labels <id>")
+    .requiredOption("--set <list>", "comma-separated label names/ids — replaces the current label list, must already exist in the task's project")
+    .action(async (id: string, opts: { set: string }) => {
+      const client = createClient();
+      await run(() => updateTaskLabels(client, { id, labels: opts.set.split(",") }));
     });
 }

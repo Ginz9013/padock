@@ -7,6 +7,7 @@ import { assertProjectMember } from "../projectAccess.ts";
 
 const taskAssigneeInclude = {
   assignees: { include: { projectMember: { include: { user: true } } } },
+  labels: { include: { label: true } },
 } as const;
 
 const priorityEnum = z.enum(["urgent", "high", "medium", "low", "none"]);
@@ -31,6 +32,22 @@ async function resolveAssigneeMemberIds(db: PrismaClient, projectId: string, use
   return members.map((m) => m.id);
 }
 
+// Same "must belong to this task's own project" invariant as assignees,
+// enforced at this boundary (schema.prisma's TaskLabel comment).
+async function resolveLabelIds(db: PrismaClient, projectId: string, labelIds: string[]): Promise<string[]> {
+  if (labelIds.length === 0) return [];
+  const labels = await db.label.findMany({ where: { projectId, id: { in: labelIds } } });
+  const foundIds = new Set(labels.map((l) => l.id));
+  const missing = labelIds.filter((id) => !foundIds.has(id));
+  if (missing.length > 0) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `Not labels of this project: ${missing.join(", ")}`,
+    });
+  }
+  return labels.map((l) => l.id);
+}
+
 export const taskRouter = router({
   create: scopedProcedure("task", "write")
     .input(
@@ -42,6 +59,7 @@ export const taskRouter = router({
         startDate: z.coerce.date().optional(),
         endDate: z.coerce.date().optional(),
         assigneeUserIds: z.array(z.string()).optional(),
+        labelIds: z.array(z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) =>
@@ -57,6 +75,7 @@ export const taskRouter = router({
           });
         }
         const memberIds = await resolveAssigneeMemberIds(ctx.db, input.projectId, input.assigneeUserIds ?? []);
+        const labelIds = await resolveLabelIds(ctx.db, input.projectId, input.labelIds ?? []);
         return ctx.db.task.create({
           data: {
             projectId: input.projectId,
@@ -68,6 +87,7 @@ export const taskRouter = router({
             endDate: input.endDate,
             createdById: ctx.user.id,
             assignees: { create: memberIds.map((projectMemberId) => ({ projectMemberId })) },
+            labels: { create: labelIds.map((labelId) => ({ labelId })) },
           },
           include: taskAssigneeInclude,
         });
@@ -178,6 +198,26 @@ export const taskRouter = router({
         await ctx.db.taskAssignee.deleteMany({ where: { taskId: input.id } });
         await ctx.db.taskAssignee.createMany({
           data: memberIds.map((projectMemberId) => ({ taskId: input.id, projectMemberId })),
+        });
+        return ctx.db.task.findUniqueOrThrow({
+          where: { id: input.id },
+          include: taskAssigneeInclude,
+        });
+      }),
+    ),
+
+  // Full replace, same semantics as updateAssignees — simplest contract
+  // for a small tag list, matches how the web UI drives a multi-select.
+  updateLabels: scopedProcedure("task", "write")
+    .input(z.object({ id: z.string(), labelIds: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) =>
+      runOrQueue(ctx, "task.updateLabels", input, async () => {
+        const task = await ctx.db.task.findUniqueOrThrow({ where: { id: input.id } });
+        await assertProjectMember(ctx.db, task.projectId, ctx.user.id);
+        const labelIds = await resolveLabelIds(ctx.db, task.projectId, input.labelIds);
+        await ctx.db.taskLabel.deleteMany({ where: { taskId: input.id } });
+        await ctx.db.taskLabel.createMany({
+          data: labelIds.map((labelId) => ({ taskId: input.id, labelId })),
         });
         return ctx.db.task.findUniqueOrThrow({
           where: { id: input.id },
