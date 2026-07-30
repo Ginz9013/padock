@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 
@@ -32,11 +32,26 @@ import { ChatRightSidebar } from "@/components/chat/chat-right-sidebar";
 // case.
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: session } = useSession();
   const leftPanelRef = useRef<PanelImperativeHandle>(null);
   const chatPanelRef = useRef<PanelImperativeHandle>(null);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
+  const previousPathnameRef = useRef(pathname);
+
+  // Entering a project (from outside it) auto-collapses the chat sidebar to
+  // give the project view more room; navigating within/between project pages
+  // afterwards leaves the user's own open/close choice alone.
+  useEffect(() => {
+    const previousPathname = previousPathnameRef.current;
+    previousPathnameRef.current = pathname;
+    const enteringProject =
+      !previousPathname.startsWith("/projects/") && pathname.startsWith("/projects/");
+    if (enteringProject) {
+      chatPanelRef.current?.collapse();
+    }
+  }, [pathname]);
 
   async function handleSignOut() {
     await authClient.signOut();
