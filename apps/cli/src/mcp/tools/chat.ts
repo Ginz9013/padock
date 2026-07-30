@@ -16,7 +16,12 @@ export function registerChatTools(server: McpServer, client: Client): void {
         to: z.string().optional().describe("DM recipient: email or name"),
         channel: z.string().optional().describe("Channel name or id"),
         message: z.string(),
-        project: z.string().optional().describe("DM only: tag the message with a project"),
+        project: z
+          .string()
+          .optional()
+          .describe(
+            "With `to`: tag the DM with a project. With `channel`: scope the channel name lookup to that project (needed to resolve a project-scoped channel by name)",
+          ),
       },
     },
     async (args) => toolResult(() => sendMessage(client, args)),
@@ -35,7 +40,10 @@ export function registerChatTools(server: McpServer, client: Client): void {
     "chat_history",
     {
       description: "Read the message history of a channel.",
-      inputSchema: { channel: z.string() },
+      inputSchema: {
+        channel: z.string(),
+        project: z.string().optional().describe("Scope the channel name lookup to a project's channels"),
+      },
     },
     async (args) => toolResult(() => getChatHistory(client, args)),
   );

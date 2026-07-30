@@ -1,7 +1,7 @@
 ---
 name: padock
 description: Use when the user wants to work with a Padock workspace — find or search project info (docs/tasks/chat), create or update tasks, read or write docs, or message a colleague. Triggers on requests like "find X in project Y", "what's the status of...", "mark this task as done/review", "send this to <colleague>".
-version: 0.7.0
+version: 0.8.0
 ---
 
 # Padock
@@ -40,9 +40,15 @@ to touch.
 
     padock project create <name>
     padock project list
-    padock task create --project=<name> --title=<title> [--description=<text>]
+    padock project members <project>
+    padock project add-member <project> --user=<email|name> [--role=admin|member]
+    padock project remove-member <project> --user=<email|name>
+    padock task create --project=<name> --title=<title> [--description=<text>] [--priority=<p>] [--start-date=<date>] [--end-date=<date>] [--assignees=<email|name>,...]
     padock task list --project=<name>
     padock task update <id> --status=<state-name>
+    padock task priority <id> --value=urgent|high|medium|low|none
+    padock task dates <id> [--start=<date>] [--end=<date>] [--clear-start] [--clear-end]
+    padock task assignees <id> --set=<email|name>,...
     padock task-state create --project=<name> --name=<name> --group=backlog|unstarted|started|completed|cancelled [--default]
     padock task-state list --project=<name>
     padock doc create --project=<name> --title=<title> (--content=<text> | --file=<path>)
@@ -52,17 +58,32 @@ to touch.
     padock channel create <title> [--project=<name>]
     padock channel list [--project=<name>]
     padock chat send --to=<email|name> --message=<text> [--project=<name>]
-    padock chat send --channel=<name> --message=<text>
+    padock chat send --channel=<name> --message=<text> [--project=<name>]
     padock chat conversation --with=<email|name>
-    padock chat history --channel=<name>
+    padock chat history --channel=<name> [--project=<name>]
     padock chat inbox
     padock user list
     padock search "<query>" [--scope=docs,tasks,chat] [--project=<name>]
     padock approvals list
     padock approvals status <id>
 
-`--project`/`--to`/`--channel` accept a name or email — no need to know
-internal ids. Every command prints JSON.
+`--project`/`--to`/`--channel`/`--user` accept a name or email — no need
+to know internal ids. Every command prints JSON.
+
+**Project access is membership-gated.** `project list` only shows
+projects you're a member of, and every task/doc/channel/chat command
+scoped to a project requires you to already be one of its members —
+`project members <project>` shows who's in it, `project add-member`
+(admin-only) adds someone. The project's creator is auto-added as its
+first admin; existing projects had every then-current user added as
+admin when this model shipped, but new projects start with just the
+creator. If a project-scoped command fails with "Not a member of this
+project", that's why — ask a project admin to add you (or the user
+you're acting for), don't retry.
+
+Task assignees must already be members of the task's own project —
+`task assignees <id> --set=...` (or `--assignees=...` on `task create`)
+rejects anyone who isn't, naming who failed.
 
 Chat is either a DM (`--to`) or a channel message (`--channel`), never
 both. Every project gets one auto-created default channel ("project
@@ -70,9 +91,12 @@ channel") on creation, plus whatever extra "issue channels" get created
 with `channel create --project=<name>` for specific discussions — a
 channel must exist before you can send to it, it never materializes
 implicitly from a message send. Channels can also be org-wide (omit
-`--project`); anyone can read any channel's messages (there's no
-per-channel membership model) — only DMs are private to the two people
-in them.
+`--project`) and stay open to everyone, same as before — but a
+project-scoped channel is now membership-gated like everything else in
+that project: pass `--project=<name>` on `chat send --channel=`/`chat
+history` to resolve one by name (needed once there's more than one
+channel with that title across different projects), and you'll get
+"Not a member of this project" if you're not actually in it.
 
 Task states are per-project, not a fixed set — `--status` on `task
 update` takes whatever state names that task's project actually has.
