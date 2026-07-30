@@ -2,18 +2,27 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Hash, MessageCircle } from "lucide-react";
+import { Hash, MessageCircle, SquarePen } from "lucide-react";
 
 import { useSession } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
 import { useUserNames } from "@/lib/use-user-names";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { ChatThread } from "@/components/chat/chat-thread";
 
 type Project = { id: string; name: string };
 type Channel = { id: string; title: string; projectId: string | null };
 type Inbox = { senderId: string; recipientId: string | null }[];
+type OrgUser = { id: string; name: string; email: string };
 
 type Conversation =
   | { kind: "dm"; key: string; withUserId: string; label: string }
@@ -59,6 +68,16 @@ export default function DashboardPage() {
     if (session?.user) void load();
   }, [session?.user?.id, userNames.size]);
 
+  function openDm(user: OrgUser) {
+    const key = `dm:${user.id}`;
+    setConversations((prev) =>
+      prev.some((c) => c.key === key)
+        ? prev
+        : [{ kind: "dm", key, withUserId: user.id, label: user.name }, ...prev],
+    );
+    setSelected({ kind: "dm", key, withUserId: user.id, label: user.name });
+  }
+
   return (
     <div className="flex h-full flex-col gap-6">
       <div>
@@ -89,7 +108,10 @@ export default function DashboardPage() {
       </section>
 
       <section className="flex min-h-0 flex-1 flex-col">
-        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Messages</h2>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-muted-foreground">Messages</h2>
+          <NewMessageDialog currentUserId={session?.user?.id} onSelect={openDm} />
+        </div>
         <div className="flex min-h-0 flex-1 overflow-hidden rounded-lg border">
           <div className="w-56 shrink-0 overflow-y-auto border-r">
             {conversations.length === 0 && (
@@ -132,5 +154,79 @@ export default function DashboardPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+// Lists every org member (§6 single-tenant: one org = "everyone") so a
+// DM can be started with someone who has no message history yet — the
+// Dashboard's conversation list otherwise only surfaces existing
+// threads via chat.inbox (§7's known "no new-DM composer" gap).
+function NewMessageDialog({
+  currentUserId,
+  onSelect,
+}: {
+  currentUserId: string | undefined;
+  onSelect: (user: OrgUser) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [users, setUsers] = useState<OrgUser[]>([]);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (open) void trpc.user.list.query().then(setUsers);
+  }, [open]);
+
+  const results = users
+    .filter((u) => u.id !== currentUserId)
+    .filter((u) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+    });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery("");
+      }}
+    >
+      <DialogTrigger asChild>
+        <button className="text-muted-foreground hover:text-foreground" aria-label="New message">
+          <SquarePen className="size-3.5" />
+        </button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New message</DialogTitle>
+        </DialogHeader>
+        <Input
+          placeholder="Search people by name or email…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoFocus
+        />
+        <div className="max-h-72 overflow-y-auto">
+          {results.length === 0 && (
+            <p className="p-2 text-sm text-muted-foreground">No people found.</p>
+          )}
+          {results.map((user) => (
+            <button
+              key={user.id}
+              onClick={() => {
+                onSelect(user);
+                setOpen(false);
+                setQuery("");
+              }}
+              className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+            >
+              <span className="text-sm font-medium">{user.name}</span>
+              <span className="text-xs text-muted-foreground">{user.email}</span>
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
