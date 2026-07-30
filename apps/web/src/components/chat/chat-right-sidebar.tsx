@@ -29,12 +29,13 @@ export function ChatRightSidebar({ onClose }: { onClose?: () => void }) {
   const toggle = (section: keyof typeof collapsed) =>
     setCollapsed((prev) => ({ ...prev, [section]: !prev[section] }));
 
-  const channels = conversations.filter((c) => c.kind === "channel");
+  const q = query.trim().toLowerCase();
+  const matchesQuery = (...values: string[]) => !q || values.some((v) => v.toLowerCase().includes(q));
 
   // Most recently messaged first — same recency data the unread dot
   // is built on (dm:<id> → latest known message timestamp, ISO so
   // string comparison sorts correctly), not a separate tracker.
-  const recent = people
+  const recentAll = people
     .filter((u) => latestMessageAt[`dm:${u.id}`])
     .sort((a, b) => {
       const at = latestMessageAt[`dm:${a.id}`] ?? "";
@@ -42,12 +43,16 @@ export function ChatRightSidebar({ onClose }: { onClose?: () => void }) {
       return bt.localeCompare(at);
     })
     .slice(0, RECENT_LIMIT);
+  const recentIds = new Set(recentAll.map((u) => u.id));
+  const recent = recentAll.filter((u) => matchesQuery(u.name, u.email));
 
-  const filtered = people.filter((u) => {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
-    return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
-  });
+  // People already surfaced under Recent stay out of this list so
+  // no one is listed twice.
+  const filtered = people
+    .filter((u) => !recentIds.has(u.id))
+    .filter((u) => matchesQuery(u.name, u.email));
+
+  const channels = conversations.filter((c) => c.kind === "channel").filter((c) => matchesQuery(c.label));
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
@@ -63,7 +68,7 @@ export function ChatRightSidebar({ onClose }: { onClose?: () => void }) {
           </Button>
         )}
         <Input
-          placeholder="Search people…"
+          placeholder="Search recent, people, channels…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="h-7 flex-1 text-xs"
@@ -102,7 +107,9 @@ export function ChatRightSidebar({ onClose }: { onClose?: () => void }) {
         {!collapsed.people && (
           <>
             {filtered.length === 0 && (
-              <p className="px-2 py-1.5 text-xs text-sidebar-foreground/60">No people found.</p>
+              <p className="px-2 py-1.5 text-xs text-sidebar-foreground/60">
+                {q ? "No people found." : "No other people."}
+              </p>
             )}
             {filtered.map((user) => (
               <PersonRow
@@ -126,7 +133,9 @@ export function ChatRightSidebar({ onClose }: { onClose?: () => void }) {
         {!collapsed.channels && (
           <>
             {channels.length === 0 && (
-              <p className="px-2 py-1.5 text-xs text-sidebar-foreground/60">No org-wide channels.</p>
+              <p className="px-2 py-1.5 text-xs text-sidebar-foreground/60">
+                {q ? "No channels found." : "No org-wide channels."}
+              </p>
             )}
             {channels.map((channel) => (
               <ChannelRow
