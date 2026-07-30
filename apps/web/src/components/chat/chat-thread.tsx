@@ -149,13 +149,13 @@ export function ChatThread({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (e.key === "Enter" && e.shiftKey) {
               e.preventDefault();
               send();
             }
           }}
           onFocus={onFocusInput}
-          placeholder="Write a message…"
+          placeholder="Write a message… (Shift+Enter to send)"
           className="min-h-9 flex-1 resize-none"
           rows={1}
         />
