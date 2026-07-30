@@ -1,6 +1,6 @@
 # Padock — Core Concept
 
-> Status: v0.7 — Phase 0 through 7 shipped (platform skeleton → thin vertical slice → CLI → universal Skill → deepened domains → MCP transport → PAT granular scopes → approval queue for unattended agents → web UI shell). The §8 north-star scenario runs end-to-end for both interactive and non-interactive agents via CLI/MCP. Phase 7 gave the web app a real entry point (landing page, login/register, authenticated shell) but chat/task/doc domains still have no web UI — `/dashboard` is a placeholder (§5.1.8). Remaining work is explicitly deferred, not blocking (§7) — see §9 for the full phase-by-phase record. Update this file as decisions solidify; do not let it drift from reality.
+> Status: v0.7 — Phase 0 through 8 shipped (platform skeleton → thin vertical slice → CLI → universal Skill → deepened domains → MCP transport → PAT granular scopes → approval queue for unattended agents → web UI shell → chat/task/doc web UI). The §8 north-star scenario runs end-to-end for both interactive/non-interactive agents (CLI/MCP) and, as of Phase 8, for a human working directly in the browser too. `/dashboard` is a real page now (§5.1.12) — chat, tasks, and docs all have web views, on top of a collapsed single-level `Channel` chat model (ADR-0001, §5.1.10). Remaining work is explicitly deferred, not blocking (§7) — see §9 for the full phase-by-phase record. Update this file as decisions solidify; do not let it drift from reality.
 
 ## 1. One-liner
 
@@ -132,7 +132,7 @@ Key property: the CLI imports the tRPC client and gets **end-to-end type safety*
 
 ### 5.1.4 Chat channels/threads (Phase 4, shipped; superseded by §5.1.10)
 
-> **Superseded (Phase 8 web UI, planned):** the two-level `Channel`→`Topic` structure described below is being collapsed into a single `Channel` level — see [ADR-0001](docs/adr/0001-collapse-topic-into-channel.md) and §5.1.10. This section is kept as the historical record of what Phase 4 actually shipped.
+> **Superseded (Phase 8, done):** the two-level `Channel`→`Topic` structure described below has been collapsed into a single `Channel` level — see [ADR-0001](docs/adr/0001-collapse-topic-into-channel.md) and §5.1.10. `Topic` no longer exists as a database table or a CLI/MCP concept. This section is kept as the historical record of what Phase 4 actually shipped.
 
 Zulip's stream+topic model (§5.1's reference), not Slack's channel+reply-thread model: a `Channel` contains named `Topic`s, and every message belongs to exactly one topic. A `ChatMessage` is now either a DM (`recipientId` set) or a channel message (`channelId`+`topicId` set) — never both.
 
@@ -173,10 +173,10 @@ Phase 7 built the first real (non-debug) web UI, replacing the Phase 0 debug hom
 - **Landing page** (`/`) — public, unauthenticated entry page with sign-up/log-in CTAs, replacing the Phase 0 debug page.
 - **Auth pages** (`/login`, `/register`) — built on the Better Auth React client (`authClient`/`useSession`/`signIn`/`signUp`/`signOut`, `apps/web/src/lib/auth-client.ts`), paired with the shadcn/ui `<Form>` (react-hook-form + zod) adopted as the standing convention (§6, "UI component library").
 - **Route protection lives in `proxy.ts`, not page rendering mode** — confirms the §6 "Rendering model" decision. `apps/web/proxy.ts` checks only whether a session cookie is present (`getSessionCookie`, no DB hit) and redirects: signed-in users away from `/`, `/login`, `/register` toward `/dashboard`; signed-out users away from `/dashboard`, `/approvals` toward `/login`. This is a UX redirect only — real authorization still happens server-side per tRPC call (`resolveIdentity`), unchanged since Phase 0.
-- **Authenticated app shell** — `(app)/layout.tsx` adds a persistent header (nav links to Dashboard/Approvals, signed-in user's email, sign-out) wrapping both pages. `/approvals` (Phase 6b) now lives inside this shell instead of standing alone.
-- **`/dashboard` is a placeholder, not a real page** — it renders a welcome message and the literal text "Chat, tasks, and docs will live here." No chat/task/doc web UI exists yet; those three domains remain **CLI/MCP-only** (see §7).
+- **Authenticated app shell** — `(app)/layout.tsx` adds a persistent header (nav links to Dashboard/Approvals, signed-in user's email, sign-out) wrapping both pages. `/approvals` (Phase 6b) now lives inside this shell instead of standing alone. **Superseded (Phase 8, done):** the top-nav header was replaced by a persistent left sidebar — see §5.1.12.
+- ~~`/dashboard` is a placeholder, not a real page~~ — **superseded (Phase 8, done):** `/dashboard` is now the real chat feed + project overview described in §5.1.12; chat/task/doc web UI all exist now, not CLI/MCP-only.
 
-### 5.1.9 Chat display boundaries in the web UI (Phase 8 web UI, planned)
+### 5.1.9 Chat display boundaries in the web UI (Phase 8, done)
 
 `ChatMessage.projectId` is a per-message tag, not a per-conversation attribute — a single DM thread can freely mix tagged and untagged messages, and the existing `chat.conversation` query already returns a counterpart's full history unfiltered by `projectId` (verified against `packages/api/src/router/chat.ts`). The web UI does not attempt to partition DM threads by project on this basis: **DMs always render as one continuous, unfiltered thread** wherever DMs are shown, regardless of any project tag on individual messages within them.
 
@@ -184,20 +184,32 @@ Only `Channel.projectId` is a clean, stable boundary — fixed once at channel c
 
 The dashboard's chat surface itself shows **both** DMs and org-wide channels (not DMs alone) — org-wide `Channel`s (§5.1.4/§5.1.10) aren't being retired, just not the dashboard's only content.
 
-### 5.1.10 Single-level `Channel` per project: "project channel" + "issue channels" (Phase 8 web UI, planned)
+### 5.1.10 Single-level `Channel` per project: "project channel" + "issue channels" (Phase 8, done)
 
 Per [ADR-0001](docs/adr/0001-collapse-topic-into-channel.md), the web UI's chat model is one flat level, not Zulip's channel-contains-topics structure (§5.1.4): a `Project` has exactly one auto-created, default **project channel** (`Channel.isDefault`, seeded at `project.create` time the same way `TaskState`'s six defaults are, §5.1.5) plus any number of manually-created **issue channels** for specific discussions — never a channel nested inside another channel. `Channel` remains optionally scoped to a `Project` via `projectId` (`null` = org-wide, unchanged from §5.1.4); within a project, `isDefault` distinguishes the one project channel from its issue channels.
 
 - **`Channel` and `Task` are deliberately not linked.** An issue channel's "issue" is a loosely-scoped discussion topic, not a foreign key to a specific `Task` row — a channel can outlive, precede, or span multiple tasks. Revisit only if a real workflow needs one-click "jump from this task to its discussion".
 - **Manual creation only, already true today.** A channel (message container) must be explicitly created before it can be referenced by a message — Padock never adopted Zulip's implicit-topic-materializes-on-send behavior in the first place (verified against `packages/api/src/router/topic.ts`), so this requirement carries forward into the merged model with no new enforcement needed.
-- **The project's chat panel needs a lightweight channel switcher**, not a single fixed feed — it defaults to showing the project channel, with the project's other issue channels reachable from the same panel. This is a step up in scope from a channel-free single feed, a direct consequence of allowing multiple issue channels per project.
+- **The project's chat panel has a lightweight channel switcher** (`ChannelPanel`, §5.1.12), not a single fixed feed — it defaults to the project channel, with the project's other issue channels reachable from the same panel.
 
-### 5.1.11 Docs tab: flat list now, nesting is a named future direction (Phase 8 web UI, planned)
+### 5.1.11 Docs tab: flat list now, nesting is a named future direction (Phase 8, done)
 
 The project workspace's Docs tab (§5.1's UX shell) opens on a **flat list** of the project's `Doc`s (Plane's Pages tab is the immediate reference) — matching `Doc`'s current schema exactly (`projectId/title/blocks/searchText`, no `parentId`), zero migration needed to ship this.
 
 - **Long-term direction, explicitly not Phase 8 scope: Notion-level docs.** The maintainer's stated north star for the Doc module is closer to Notion than to Plane — starting with arbitrarily nested pages (a `Doc.parentId` self-relation, turning the flat list into a tree), which Plane's own Pages already has and Padock doesn't yet. This is named here so it isn't lost, not because Phase 8 is building it.
 - **"Notion-level" means richer editing + hierarchy, not real-time multiplayer.** §6/§10 already exclude CRDT/multi-cursor collaborative editing from v1 non-goals; that exclusion stands. Nested pages are an orthogonal, separate feature from live co-editing and don't require revisiting that non-goal.
+
+### 5.1.12 Phase 8 web UI: sidebar shell, Dashboard, project workspace (done)
+
+Phase 8 replaced Phase 7's top-nav header and placeholder `/dashboard` with the actual chat/task/doc web UI, organized by "where you are" (Dashboard vs. a Project) rather than by domain module, per this session's UX decision:
+
+- **Persistent left sidebar** (`AppSidebar`) — Dashboard link, a flat Projects list (every org member's projects, with an inline "new project" dialog), and Approvals. Replaces the Phase 7 top-nav bar entirely; sign-out moved to a slim top-right header.
+- **Dashboard** — a compact project-card row, plus the merged DM+org-wide-channel feed from §5.1.9 as a master-detail view: a conversation list on the left, the selected thread (`ChatThread`) on the right. No "start a new DM" composer yet — only conversations that already have history show up (via `chat.inbox`), a known gap, not a design decision.
+- **Project workspace** (`/projects/[id]`) — a header (project name) with a Task/Docs tab strip implemented as real Next.js routes (`next/link`, not client-side tab state), so a doc keeps its own bookmarkable URL — Plane Navigation 2.0's horizontal-tab pattern is the reference. The chat panel (`ChannelPanel`, §5.1.10) renders alongside, orthogonal to the tabs: collapsible, defaults to the project channel, with a lightweight switcher across issue channels.
+- **Task tab** (`/projects/[id]`, default route) — tasks grouped by that project's own `TaskState`s (§5.1.5), ordered by `position`; changing a task's state is a `<Select>` of that project's own states. Task creation only; no delete/archive yet.
+- **Docs tab** (`/projects/[id]/docs`) — the flat list from §5.1.11, plus a detail/editor page (`/projects/[id]/docs/[docId]`) that's a plain title input + Markdown `<textarea>`, not a rich block editor — the API already round-trips Markdown↔blocks (§5.1.7), so a textarea is enough to reach v1. No delete yet either.
+- **Shared building blocks**: `ChatThread` (message list + compose, used by both the Dashboard's DM/channel view and the project workspace's `ChannelPanel`) and a shared `src/lib/trpc.ts` client — factored out once three "use client" pages had each hand-rolled their own `createTRPCClient`.
+- **Verification note**: no browser-automation tool was available in the session that built this, so it was verified via full-workspace `typecheck` plus real HTTP calls (a signed-up session cookie driving every procedure each page calls — `project.create`'s default-channel/default-taskState seeding, `task.create`/`doc.create`/`chat.send` end to end) against the live dogfood database, not a visual/interactive browser check. Treat the actual rendered layout as unverified until someone looks at it in a browser.
 
 ### 5.2 Padock CLI
 
@@ -259,13 +271,15 @@ The CLI is the single implementation of "how to talk to Padock." Everything abov
 | Skill distribution (v1) | One portable `SKILL.md` (open Agent Skills standard, §5.3) — no per-agent adapters. `padock init-skill` writes it to `.agents/skills/`, `~/.agents/skills/`, and `~/.claude/skills/`, no marketplace | The standard is natively supported by Claude Code, Codex CLI, and Gemini CLI already — one file reaches all three. Keeps Skill and CLI versions in lockstep automatically; avoids a second release pipeline pre-launch |
 | UI component library (Phase 7, web UI) | shadcn/ui, going forward, for all new `apps/web` UI — supersedes the ad-hoc Tailwind-utility-only style used by the Phase 0 debug page and `/approvals` | Phase 0–6b pages hand-rolled every input/button with raw Tailwind classes and no form library. Real register/login/dashboard UI needs consistent form validation (shadcn's `<Form>` is `react-hook-form` + `zod` under the hood — reuses the `zod` already in the stack), accessible primitives (Radix), and a consistent look without hand-building each control. Ask before reaching for anything else if shadcn doesn't cover a need. |
 | Rendering model (Phase 7, web UI) | Every `apps/web` page is a Client Component (`"use client"`) — no Server Component data-fetching. Route protection stays a separate concern, handled by `proxy.ts` reading the session cookie, not by page rendering mode | Padock's web UI is an internal, behind-login tool (not a public marketing site needing SEO/RSC payload optimization); the existing Phase 0 debug page and `/approvals` were already built this way (fetch-on-mount via the tRPC client). There is no App Router flag for "global CSR" — full static export (`output: "export"`) was considered and rejected because it can't run `proxy.ts` or the server-side `/api/auth/*`/`/api/trpc/*` route handlers this app depends on. This convention is chosen for a consistent mental model across pages, not because it's inherently faster than Server Components. |
+| Chat data model (Phase 8) | Collapsed Zulip's two-level `Channel`→`Topic` into a single `Channel` (ADR-0001); a `Project` gets one auto-seeded default "project channel" plus manually-created "issue channels" | §5.1.10. The two-level model's one real payoff — topics materializing implicitly on send — was never built in Padock, so paying for the extra level stopped making sense once the web UI needed a flat per-project list; breaking change to already-shipped CLI/MCP surfaces, done deliberately while dogfood data was still small |
+| UX navigation model (Phase 8, web UI) | Sidebar-first, organized by "where you are" (Dashboard / a Project), not by domain module (chat/tasks/docs each getting their own top-level nav item) | §5.1.12. Matches the maintainer's stated concept for Padock ("Paddock" as a home-base metaphor) — Dashboard is the cross-project communication surface, a Project is a self-contained workspace with Task/Docs tabs + an orthogonal chat panel, not three separate module screens |
 
 ## 7. Open decisions (deferred, not blocking Phase 0–3)
 
 - **Finer-grained PAT scopes** (per-project, per-action-verb beyond read/write): Phase 6 shipped per-domain read/write only. Revisit if a real use case needs narrower slicing (e.g. a key scoped to one specific project, not the whole `task`/`doc` domain).
 - **Approval queue notifications/expiry**: Phase 6b's `/approvals` page is pull-only (a human has to go check it) — no push notification (email/chat ping) when something new is queued, and no expiry/TTL on a pending request that never gets decided. Revisit if the queue sees real volume and pull-only proves insufficient.
 - **Enterprise directory login (LDAP/AD)**: no official Better Auth LDAP plugin exists (§5.1.1). Near-term path is the SSO plugin (SAML/OIDC) fronting the directory via an IdP; revisit raw LDAP bind only if a real deployment proves the SSO path insufficient.
-- **Chat/task/doc web UI**: Phase 7 shipped auth (landing/login/register) and an authenticated app shell only (§5.1.8); `/dashboard` is a placeholder. Chat, tasks, and docs have no web views — CLI/MCP are the only interface for those three domains today. Not blocking (§8's north star already runs end-to-end via CLI/MCP), but a real gap for any non-technical user who isn't running an agent/CLI. Revisit as its own phase once there's a concrete need for humans to use those domains directly in the browser.
+- **Web UI gaps left by Phase 8** (§5.1.12): no "start a new DM" composer on the Dashboard (only conversations with existing history show up); no delete/archive for tasks, docs, or channels; the doc editor is a plain Markdown textarea, not the Notion-level rich/nested editor named as the long-term direction (§5.1.11). None of these block §8's north star (already CLI/MCP-complete); revisit as real usage surfaces friction.
 
 ## 8. Example end-to-end flow (north star scenario)
 
@@ -292,6 +306,7 @@ Build a thin walking skeleton across all three domains first, validate the flow 
 6. **Phase 5 — Optional richer transport & marketplace distribution**: MCP server wrapper (`padock mcp serve`) — **done**, §5.3. Publishing to agentskills.io/an official marketplace is still open — a human/business decision, not engineering work.
 7. **Phase 6 — Non-interactive agents & fine-grained permissions** — **done**: PAT granular scopes (per-domain read/write, §5.1.1/§6, Phase 6) and a server-side approval queue for unattended/scheduled agents (§5.1.1/§6, Phase 6b) — both shipped. Notifications/expiry on the approval queue remain open (§7), not blocking.
 8. **Phase 7 — Web UI shell** — **done**: landing page, login/register auth flow, `proxy.ts` route protection, authenticated app shell wrapping `/dashboard` (placeholder) and `/approvals` (§5.1.8). Chat/task/doc web views are still not built — those domains remain CLI/MCP-only (§7).
+9. **Phase 8 — Chat/task/doc web UI** — **done**: collapsed the Channel/Topic chat model (ADR-0001, §5.1.10), then built a sidebar-first shell, a real Dashboard (chat feed + project overview), and a project workspace (Task/Docs tabs + collapsible chat panel) (§5.1.12). Remaining gaps (DM composer, delete/archive, rich doc editor) are tracked in §7, not blocking.
 
 ## 10. Non-goals (v1)
 
