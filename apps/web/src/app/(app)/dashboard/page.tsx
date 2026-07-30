@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Hash, MessageCircle, SquarePen } from "lucide-react";
+import { Hash, MessageCircle } from "lucide-react";
 
 import { useSession } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
@@ -10,13 +10,6 @@ import { useUserNames } from "@/lib/use-user-names";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { ChatThread } from "@/components/chat/chat-thread";
 
 type Project = { id: string; name: string };
@@ -38,14 +31,17 @@ export default function DashboardPage() {
   const userNames = useUserNames();
   const [projects, setProjects] = useState<Project[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [people, setPeople] = useState<OrgUser[]>([]);
+  const [peopleQuery, setPeopleQuery] = useState("");
   const [selected, setSelected] = useState<Conversation | null>(null);
 
   useEffect(() => {
     async function load() {
-      const [projectList, channels, inbox] = await Promise.all([
+      const [projectList, channels, inbox, users] = await Promise.all([
         trpc.project.list.query(),
         trpc.channel.list.query() as Promise<Channel[]>,
         trpc.chat.inbox.query() as Promise<Inbox>,
+        trpc.user.list.query() as Promise<OrgUser[]>,
       ]);
       setProjects(projectList);
 
@@ -64,6 +60,7 @@ export default function DashboardPage() {
         .map((c) => ({ kind: "channel", key: `channel:${c.id}`, channelId: c.id, label: c.title }));
 
       setConversations([...dms, ...orgWideChannels]);
+      setPeople(users.filter((u) => u.id !== meId));
     }
     if (session?.user) void load();
   }, [session?.user?.id, userNames.size]);
@@ -77,6 +74,17 @@ export default function DashboardPage() {
     );
     setSelected({ kind: "dm", key, withUserId: user.id, label: user.name });
   }
+
+  const conversationUserIds = new Set(
+    conversations.filter((c) => c.kind === "dm").map((c) => c.withUserId),
+  );
+  const filteredPeople = people
+    .filter((u) => !conversationUserIds.has(u.id))
+    .filter((u) => {
+      const q = peopleQuery.trim().toLowerCase();
+      if (!q) return true;
+      return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+    });
 
   return (
     <div className="flex h-full flex-col gap-6">
@@ -108,14 +116,16 @@ export default function DashboardPage() {
       </section>
 
       <section className="flex min-h-0 flex-1 flex-col">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-muted-foreground">Messages</h2>
-          <NewMessageDialog currentUserId={session?.user?.id} onSelect={openDm} />
-        </div>
+        <h2 className="mb-2 text-sm font-medium text-muted-foreground">Messages</h2>
         <div className="flex min-h-0 flex-1 overflow-hidden rounded-lg border">
-          <div className="w-56 shrink-0 overflow-y-auto border-r">
-            {conversations.length === 0 && (
+          <div className="flex w-64 shrink-0 flex-col overflow-y-auto border-r">
+            {conversations.length === 0 && people.length === 0 && (
               <p className="p-3 text-sm text-muted-foreground">Nothing here yet.</p>
+            )}
+            {conversations.length > 0 && (
+              <div className="px-3 pt-2 pb-1 text-xs font-medium text-muted-foreground">
+                Conversations
+              </div>
             )}
             {conversations.map((c) => (
               <button
@@ -134,6 +144,35 @@ export default function DashboardPage() {
                 <span className="truncate">{c.label}</span>
               </button>
             ))}
+
+            {people.length > 0 && (
+              <>
+                <div className="px-3 pt-3 pb-1 text-xs font-medium text-muted-foreground">
+                  People
+                </div>
+                <div className="px-3 pb-1.5">
+                  <Input
+                    placeholder="Search people…"
+                    value={peopleQuery}
+                    onChange={(e) => setPeopleQuery(e.target.value)}
+                    className="h-7 text-xs"
+                  />
+                </div>
+                {filteredPeople.length === 0 && (
+                  <p className="px-3 py-1.5 text-xs text-muted-foreground">No people found.</p>
+                )}
+                {filteredPeople.map((user) => (
+                  <button
+                    key={user.id}
+                    onClick={() => openDm(user)}
+                    className="flex w-full flex-col items-start gap-0 px-3 py-1.5 text-left hover:bg-muted"
+                  >
+                    <span className="truncate text-sm">{user.name}</span>
+                    <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                  </button>
+                ))}
+              </>
+            )}
           </div>
           <div className="min-w-0 flex-1">
             {selected ? (
@@ -154,79 +193,5 @@ export default function DashboardPage() {
         </div>
       </section>
     </div>
-  );
-}
-
-// Lists every org member (§6 single-tenant: one org = "everyone") so a
-// DM can be started with someone who has no message history yet — the
-// Dashboard's conversation list otherwise only surfaces existing
-// threads via chat.inbox (§7's known "no new-DM composer" gap).
-function NewMessageDialog({
-  currentUserId,
-  onSelect,
-}: {
-  currentUserId: string | undefined;
-  onSelect: (user: OrgUser) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [users, setUsers] = useState<OrgUser[]>([]);
-  const [query, setQuery] = useState("");
-
-  useEffect(() => {
-    if (open) void trpc.user.list.query().then(setUsers);
-  }, [open]);
-
-  const results = users
-    .filter((u) => u.id !== currentUserId)
-    .filter((u) => {
-      const q = query.trim().toLowerCase();
-      if (!q) return true;
-      return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
-    });
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) setQuery("");
-      }}
-    >
-      <DialogTrigger asChild>
-        <button className="text-muted-foreground hover:text-foreground" aria-label="New message">
-          <SquarePen className="size-3.5" />
-        </button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New message</DialogTitle>
-        </DialogHeader>
-        <Input
-          placeholder="Search people by name or email…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          autoFocus
-        />
-        <div className="max-h-72 overflow-y-auto">
-          {results.length === 0 && (
-            <p className="p-2 text-sm text-muted-foreground">No people found.</p>
-          )}
-          {results.map((user) => (
-            <button
-              key={user.id}
-              onClick={() => {
-                onSelect(user);
-                setOpen(false);
-                setQuery("");
-              }}
-              className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-muted"
-            >
-              <span className="text-sm font-medium">{user.name}</span>
-              <span className="text-xs text-muted-foreground">{user.email}</span>
-            </button>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
