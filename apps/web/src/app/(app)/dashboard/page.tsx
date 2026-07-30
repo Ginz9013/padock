@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Hash, MessageCircle } from "lucide-react";
 
 import { useSession } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
 import { useUserNames } from "@/lib/use-user-names";
+import { useRealtimeEvent } from "@/lib/use-realtime";
+import type { RealtimeEvent } from "@/lib/realtime";
+import { useUnread } from "@/lib/use-unread";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,8 +17,14 @@ import { ChatThread } from "@/components/chat/chat-thread";
 
 type Project = { id: string; name: string };
 type Channel = { id: string; title: string; projectId: string | null };
-type Inbox = { senderId: string; recipientId: string | null }[];
+type Inbox = { senderId: string; recipientId: string | null; createdAt: string }[];
 type OrgUser = { id: string; name: string; email: string };
+type IncomingChatMessage = {
+  senderId: string;
+  recipientId: string | null;
+  channelId: string | null;
+  createdAt: string;
+};
 
 type Conversation =
   | { kind: "dm"; key: string; withUserId: string; label: string }
@@ -29,6 +38,7 @@ type Conversation =
 export default function DashboardPage() {
   const { data: session } = useSession();
   const userNames = useUserNames();
+  const { noteLatest, markRead, isUnread } = useUnread();
   const [projects, setProjects] = useState<Project[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [people, setPeople] = useState<OrgUser[]>([]);
@@ -48,6 +58,7 @@ export default function DashboardPage() {
       const meId = session?.user?.id;
       const dms: Conversation[] = inbox.map((m) => {
         const withUserId = m.senderId === meId ? m.recipientId! : m.senderId;
+        noteLatest(`dm:${withUserId}`, m.createdAt);
         return {
           kind: "dm",
           key: `dm:${withUserId}`,
@@ -63,6 +74,7 @@ export default function DashboardPage() {
       setPeople(users.filter((u) => u.id !== meId));
     }
     if (session?.user) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id, userNames.size]);
 
   function openDm(user: OrgUser) {
@@ -73,7 +85,45 @@ export default function DashboardPage() {
         : [{ kind: "dm", key, withUserId: user.id, label: user.name }, ...prev],
     );
     setSelected({ kind: "dm", key, withUserId: user.id, label: user.name });
+    markRead(key);
   }
+
+  function selectConversation(c: Conversation) {
+    setSelected(c);
+    markRead(c.key);
+  }
+
+  // Keeps the sidebar live: new messages bump the unread dot (or, for
+  // a DM from someone with no existing thread, materialize a new
+  // conversation entry) without waiting on a page reload — the same
+  // apps/realtime broadcast that ChatThread uses to live-append.
+  const meId = session?.user?.id;
+  useRealtimeEvent(
+    useCallback(
+      (event: RealtimeEvent) => {
+        if (event.type !== "chat.message") return;
+        const message = event.message as IncomingChatMessage;
+
+        if (message.channelId) {
+          noteLatest(`channel:${message.channelId}`, message.createdAt);
+          return;
+        }
+        if (!meId || !message.recipientId || message.senderId === meId) return;
+        const counterpart = message.senderId;
+        const key = `dm:${counterpart}`;
+        noteLatest(key, message.createdAt);
+        setConversations((prev) =>
+          prev.some((c) => c.key === key)
+            ? prev
+            : [
+                { kind: "dm", key, withUserId: counterpart, label: userNames.get(counterpart) ?? counterpart },
+                ...prev,
+              ],
+        );
+      },
+      [meId, noteLatest, userNames],
+    ),
+  );
 
   const conversationUserIds = new Set(
     conversations.filter((c) => c.kind === "dm").map((c) => c.withUserId),
@@ -130,7 +180,7 @@ export default function DashboardPage() {
             {conversations.map((c) => (
               <button
                 key={c.key}
-                onClick={() => setSelected(c)}
+                onClick={() => selectConversation(c)}
                 className={cn(
                   "flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted",
                   selected?.key === c.key && "bg-muted font-medium",
@@ -141,7 +191,10 @@ export default function DashboardPage() {
                 ) : (
                   <Hash className="size-3.5 shrink-0 text-muted-foreground" />
                 )}
-                <span className="truncate">{c.label}</span>
+                <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                {isUnread(c.key) && (
+                  <span className="size-2 shrink-0 rounded-full bg-red-500" aria-label="Unread" />
+                )}
               </button>
             ))}
 
