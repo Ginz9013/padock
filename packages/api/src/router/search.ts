@@ -9,7 +9,6 @@ interface SearchResult {
   id: string;
   projectId: string | null;
   channelId: string | null;
-  topicId: string | null;
   title: string | null;
   snippet: string;
   rank: number;
@@ -58,7 +57,6 @@ export const searchRouter = router({
             id: row.id,
             projectId: row.projectId,
             channelId: null,
-            topicId: null,
             title: row.title,
             snippet: row.searchText.slice(0, 200),
             rank: Number(row.rank),
@@ -92,7 +90,6 @@ export const searchRouter = router({
             id: row.id,
             projectId: row.projectId,
             channelId: null,
-            topicId: null,
             title: row.title,
             snippet: (row.description ?? "").slice(0, 200),
             rank: Number(row.rank),
@@ -115,13 +112,12 @@ export const searchRouter = router({
             id: string;
             projectId: string | null;
             channelId: string | null;
-            topicId: string | null;
             content: string;
             createdAt: Date;
             rank: number;
           }>
         >`
-          SELECT cm.id, cm."projectId", cm."channelId", cm."topicId", cm.content, cm."createdAt",
+          SELECT cm.id, cm."projectId", cm."channelId", cm.content, cm."createdAt",
                  ts_rank(to_tsvector('english', cm.content), websearch_to_tsquery('english', ${input.query})) AS rank
           FROM chat_message cm
           LEFT JOIN channel ch ON ch.id = cm."channelId"
@@ -137,7 +133,6 @@ export const searchRouter = router({
             id: row.id,
             projectId: row.projectId,
             channelId: row.channelId,
-            topicId: row.topicId,
             title: null,
             snippet: row.content.slice(0, 200),
             rank: Number(row.rank),

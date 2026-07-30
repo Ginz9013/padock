@@ -6,7 +6,6 @@ import { chatRouter } from "./router/chat.ts";
 import { userRouter } from "./router/user.ts";
 import { searchRouter } from "./router/search.ts";
 import { channelRouter } from "./router/channel.ts";
-import { topicRouter } from "./router/topic.ts";
 import { taskStateRouter } from "./router/taskState.ts";
 import { apikeyRouter } from "./router/apikey.ts";
 import { approvalRouter } from "./router/approval.ts";
@@ -26,7 +25,6 @@ export const appRouter = router({
   user: userRouter,
   search: searchRouter,
   channel: channelRouter,
-  topic: topicRouter,
   taskState: taskStateRouter,
   apikey: apikeyRouter,
   approval: approvalRouter,
