@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { PanelRightOpen } from "lucide-react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 
 import { authClient, useSession } from "@/lib/auth-client";
@@ -21,10 +21,14 @@ import { ChatRightSidebar } from "@/components/chat/chat-right-sidebar";
 // sidebar) sits *below* a full-width header, not beside it — the
 // header spans the whole viewport width; only the row underneath is
 // split into columns. The right chat sidebar is resizable-by-drag and
-// collapsible via the header toggle, using react-resizable-panels
-// (shadcn's `resizable`) rather than shadcn's `Sidebar` primitive:
-// Sidebar only toggles between fixed preset widths, it has no drag-
-// to-resize, which this needed alongside the collapse button.
+// collapsible via a toggle button in its own top bar (not the app
+// header), using react-resizable-panels (shadcn's `resizable`) rather
+// than shadcn's `Sidebar` primitive: Sidebar only toggles between
+// fixed preset widths, it has no drag-to-resize, which this needed
+// alongside the collapse button. Collapsing shrinks the panel to zero
+// width, so there's nothing left in the row to click to reopen it —
+// a floating button anchored to the row's top-right corner covers
+// that case.
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { data: session } = useSession();
@@ -53,23 +57,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {session?.user && (
             <span className="text-sm text-muted-foreground">{session.user.email}</span>
           )}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={toggleChatSidebar}
-            aria-label={chatCollapsed ? "Open chat sidebar" : "Close chat sidebar"}
-          >
-            {chatCollapsed ? (
-              <PanelRightOpen className="size-4" />
-            ) : (
-              <PanelRightClose className="size-4" />
-            )}
-          </Button>
           <Button variant="outline" size="sm" onClick={handleSignOut}>
             Sign out
           </Button>
         </header>
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
           <AppSidebar />
           <ResizablePanelGroup orientation="horizontal" className="min-w-0 flex-1">
             <ResizablePanel defaultSize="78" minSize="40">
@@ -85,9 +77,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               defaultSize="22"
               onResize={() => setChatCollapsed(chatPanelRef.current?.isCollapsed() ?? false)}
             >
-              <ChatRightSidebar />
+              <ChatRightSidebar onClose={toggleChatSidebar} />
             </ResizablePanel>
           </ResizablePanelGroup>
+          {chatCollapsed && (
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={toggleChatSidebar}
+              aria-label="Open chat sidebar"
+              className="absolute top-3 right-3 z-10 shadow-sm"
+            >
+              <PanelRightOpen className="size-4" />
+            </Button>
+          )}
         </div>
       </div>
     </ChatSidebarProvider>

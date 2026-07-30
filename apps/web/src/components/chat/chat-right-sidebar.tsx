@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronRight, Clock, Hash, Users } from "lucide-react";
+import { ChevronRight, Clock, Hash, PanelRightClose, Users } from "lucide-react";
 
 import { useChatSidebar, type Conversation, type OrgUser } from "@/components/chat/chat-sidebar-provider";
 import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +21,7 @@ const RECENT_LIMIT = 10;
 // was removed, so people stay listed here permanently instead of
 // dropping out once a thread exists (that used to make someone you'd
 // just messaged vanish from the list you'd use to message them again).
-export function ChatRightSidebar() {
+export function ChatRightSidebar({ onClose }: { onClose?: () => void }) {
   const { people, conversations, selected, isUnread, latestMessageAt, openDm, selectConversation } =
     useChatSidebar();
   const [query, setQuery] = useState("");
@@ -50,13 +51,23 @@ export function ChatRightSidebar() {
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-      <div className="border-b px-3 py-2">
+      <div className="flex items-center gap-1.5 border-b px-3 py-2">
         <Input
           placeholder="Search people…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="h-7 text-xs"
+          className="h-7 flex-1 text-xs"
         />
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            aria-label="Close chat sidebar"
+          >
+            <PanelRightClose className="size-4" />
+          </Button>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto px-1.5 pb-2">
         {recent.length > 0 && (
