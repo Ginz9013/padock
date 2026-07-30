@@ -6,7 +6,7 @@ import { Hash, MessageCircle } from "lucide-react";
 
 import { useSession } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
-import { useUserNames } from "@/lib/use-user-names";
+import { useUserProfiles } from "@/lib/use-user-profiles";
 import { useRealtimeEvent } from "@/lib/use-realtime";
 import type { RealtimeEvent } from "@/lib/realtime";
 import { useUnread } from "@/lib/use-unread";
@@ -37,7 +37,7 @@ type Conversation =
 // which get their own persistent nav entry in the sidebar too.
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const userNames = useUserNames();
+  const profiles = useUserProfiles();
   const { noteLatest, markRead, isUnread } = useUnread();
   const [projects, setProjects] = useState<Project[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -63,7 +63,7 @@ export default function DashboardPage() {
           kind: "dm",
           key: `dm:${withUserId}`,
           withUserId,
-          label: userNames.get(withUserId) ?? withUserId,
+          label: profiles.get(withUserId)?.name ?? withUserId,
         };
       });
       const orgWideChannels: Conversation[] = channels
@@ -75,7 +75,7 @@ export default function DashboardPage() {
     }
     if (session?.user) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user?.id, userNames.size]);
+  }, [session?.user?.id, profiles.size]);
 
   function openDm(user: OrgUser) {
     const key = `dm:${user.id}`;
@@ -116,12 +116,12 @@ export default function DashboardPage() {
           prev.some((c) => c.key === key)
             ? prev
             : [
-                { kind: "dm", key, withUserId: counterpart, label: userNames.get(counterpart) ?? counterpart },
+                { kind: "dm", key, withUserId: counterpart, label: profiles.get(counterpart)?.name ?? counterpart },
                 ...prev,
               ],
         );
       },
-      [meId, noteLatest, userNames],
+      [meId, noteLatest, profiles],
     ),
   );
 
@@ -235,7 +235,7 @@ export default function DashboardPage() {
                     ? { kind: "dm", withUserId: selected.withUserId }
                     : { kind: "channel", channelId: selected.channelId }
                 }
-                userNames={userNames}
+                profiles={profiles}
                 onFocusInput={() => markRead(selected.key)}
               />
             ) : (

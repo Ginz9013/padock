@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { trpc } from "@/lib/trpc";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Avatar } from "@/components/ui/avatar";
 import { useSession } from "@/lib/auth-client";
 import { useRealtimeEvent } from "@/lib/use-realtime";
 import type { RealtimeEvent } from "@/lib/realtime";
+import type { UserProfile } from "@/lib/use-user-profiles";
 
 type ChatMessage = {
   id: string;
@@ -30,12 +31,12 @@ type Target = { kind: "channel"; channelId: string } | { kind: "dm"; withUserId:
 export function ChatThread({
   target,
   projectId,
-  userNames,
+  profiles,
   onFocusInput,
 }: {
   target: Target;
   projectId?: string;
-  userNames: Map<string, string>;
+  profiles: Map<string, UserProfile>;
   // Fired when the compose box gains focus — the signal a caller can
   // use to mark this conversation read (e.g. clear an unread badge):
   // coming back to type a reply means the user has noticed whatever
@@ -114,27 +115,28 @@ export function ChatThread({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-3 p-3">
+        <div className="flex flex-col gap-2.5 p-3">
           {messages.map((message) => {
-            const mine = message.senderId === session?.user?.id;
+            const profile = profiles.get(message.senderId);
+            const name = profile?.name ?? message.senderId;
             return (
-              <div key={message.id} className={cn("flex flex-col", mine && "items-end")}>
-                <span className="text-xs text-muted-foreground">
-                  {userNames.get(message.senderId) ?? message.senderId}
-                  {" · "}
-                  {new Date(message.createdAt).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-                <p
-                  className={cn(
-                    "mt-0.5 max-w-sm rounded-lg px-3 py-1.5 text-sm",
-                    mine ? "bg-primary text-primary-foreground" : "bg-muted",
-                  )}
-                >
-                  {message.content}
-                </p>
+              <div
+                key={message.id}
+                className="flex w-full items-start gap-2.5 rounded-md bg-muted/40 px-3 py-2"
+              >
+                <Avatar userId={message.senderId} name={name} image={profile?.image} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-sm font-medium">{name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(message.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-sm whitespace-pre-wrap">{message.content}</p>
+                </div>
               </div>
             );
           })}

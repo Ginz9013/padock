@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { PanelRightClose, PanelRightOpen, Plus } from "lucide-react";
 
 import { trpc } from "@/lib/trpc";
-import { useUserNames } from "@/lib/use-user-names";
+import { useUserProfiles } from "@/lib/use-user-profiles";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,7 @@ type Channel = { id: string; title: string; isDefault: boolean };
 // channels" are reachable from the same panel via a lightweight
 // switcher, not a full channel-management UI.
 export function ChannelPanel({ projectId }: { projectId: string }) {
-  const userNames = useUserNames();
+  const profiles = useUserProfiles();
   const [open, setOpen] = useState(true);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
@@ -79,7 +79,7 @@ export function ChannelPanel({ projectId }: { projectId: string }) {
       </div>
       <div className="min-h-0 flex-1">
         {activeChannelId ? (
-          <ChatThread target={{ kind: "channel", channelId: activeChannelId }} userNames={userNames} />
+          <ChatThread target={{ kind: "channel", channelId: activeChannelId }} profiles={profiles} />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             No channels yet
