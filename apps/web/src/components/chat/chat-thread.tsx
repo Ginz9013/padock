@@ -1,18 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useSession } from "@/lib/auth-client";
+import { useRealtimeEvent } from "@/lib/use-realtime";
+import type { RealtimeEvent } from "@/lib/realtime";
 
 type ChatMessage = {
   id: string;
   senderId: string;
   content: string;
   createdAt: string;
+};
+
+type IncomingChatMessage = ChatMessage & {
+  recipientId: string | null;
+  channelId: string | null;
 };
 
 type Target = { kind: "channel"; channelId: string } | { kind: "dm"; withUserId: string };
@@ -35,6 +42,8 @@ export function ChatThread({
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const targetKey = target.kind === "channel" ? target.channelId : target.withUserId;
+
   async function refresh() {
     const rows =
       target.kind === "channel"
@@ -47,11 +56,36 @@ export function ChatThread({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target.kind === "channel" ? target.channelId : target.withUserId]);
+  }, [targetKey]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
+
+  // Live-append messages pushed via apps/realtime instead of waiting
+  // for the next manual refresh (CONTEXT.md §5.1.4's ws+Redis seam —
+  // the push is "something changed, go re-fetch/append", scoped here
+  // to whichever target this thread instance is showing). Dedupe by
+  // id since our own `send()` already appends via its own refresh().
+  const meId = session?.user?.id;
+  useRealtimeEvent(
+    useCallback(
+      (event: RealtimeEvent) => {
+        if (event.type !== "chat.message") return;
+        const message = event.message as IncomingChatMessage;
+        const matches =
+          target.kind === "channel"
+            ? message.channelId === target.channelId
+            : message.recipientId !== null &&
+              ((message.senderId === meId && message.recipientId === target.withUserId) ||
+                (message.senderId === target.withUserId && message.recipientId === meId));
+        if (!matches) return;
+        setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
+      },
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [targetKey, meId],
+    ),
+  );
 
   async function send() {
     const content = draft.trim();
