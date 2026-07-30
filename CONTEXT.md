@@ -1,6 +1,6 @@
 # Padock — Core Concept
 
-> Status: v0.2 — core architecture and Phase 0–3 scope grilled and resolved (see §6/§7). Foundation for subsequent design & implementation. Update this file as decisions solidify; do not let it drift from reality.
+> Status: v0.7 — Phase 0 through 6b shipped (platform skeleton → thin vertical slice → CLI → universal Skill → deepened domains → MCP transport → PAT granular scopes → approval queue for unattended agents). The §8 north-star scenario runs end-to-end for both interactive and non-interactive agents. Remaining work is explicitly deferred, not blocking (§7) — see §9 for the full phase-by-phase record. Update this file as decisions solidify; do not let it drift from reality.
 
 ## 1. One-liner
 
@@ -235,7 +235,7 @@ The CLI is the single implementation of "how to talk to Padock." Everything abov
 
 1. Agent (via Skill, running interactively with the user present) calls `padock search "某某資料" --project=某某專案` → full-text search hits docs + tasks (always project-scoped) + any chat DMs previously tagged with that `project_id` (§5.1.2), in one query.
 2. Agent reads/analyzes returned content itself (Padock returns raw matches, not a semantic summary — §5.1.3) and reports findings back to the user in the same conversation.
-3. User confirms ("沒問題") — this *is* the confirm-before-act step (§4); no separate approval mechanism exists in v1.
+3. User confirms ("沒問題") — this *is* the confirm-before-act step (§4) for an interactive agent. (An unattended/scheduled agent running the same flow would instead have steps 4–5 queue on `/approvals` for a human to decide later — Phase 6b, §5.1.1.)
 4. Agent calls `padock chat send --to=同事 --message="<analysis summary>"` (point-to-point DM — §5.1.3).
 5. Agent calls `padock task update <id> --status=review` (one of the four fixed statuses — §5.1.3).
 6. Every step above is attributed to the agent + user (via the PAT used) in Padock's audit log.
@@ -262,9 +262,8 @@ Build a thin walking skeleton across all three domains first, validate the flow 
 - No semantic/vector search in v1 (§5.1.3, §6) — full-text only, to avoid an embedding-model dependency.
 - No push notifications or expiry on the Phase 6b approval queue (§7) — pull-only, unbounded pending requests until a human checks `/approvals`.
 - No per-resource-instance PAT scoping in v1 (§7) — Phase 6 shipped per-domain read/write; per-project or finer slicing is deferred.
-- No configurable task workflows in v1 (§5.1.3) — fixed four-state enum only.
-- No chat channels/threads in v1 (§5.1.3) — DM only.
 - No raw LDAP bind in v1 (§5.1.1, §7) — enterprise SSO (SAML/OIDC via Better Auth's SSO plugin) is the supported enterprise-auth path; direct LDAP only if later proven necessary.
+- No marketplace/registry publishing of the Skill (§5.3) — a human/business timing decision, not engineering work.
 
 ## 11. Naming reference note
 
