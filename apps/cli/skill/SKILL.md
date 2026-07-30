@@ -1,7 +1,7 @@
 ---
 name: padock
 description: Use when the user wants to work with a Padock workspace — find or search project info (docs/tasks/chat), create or update tasks, read or write docs, or message a colleague. Triggers on requests like "find X in project Y", "what's the status of...", "mark this task as done/review", "send this to <colleague>".
-version: 0.5.0
+version: 0.6.0
 ---
 
 # Padock
@@ -60,6 +60,8 @@ alongside whatever domain it's meant to touch.
     padock chat inbox
     padock user list
     padock search "<query>" [--scope=docs,tasks,chat] [--project=<name>]
+    padock approvals list
+    padock approvals status <id>
 
 `--project`/`--to`/`--channel`/`--topic` accept a name or email — no need
 to know internal ids. Every command prints JSON.
@@ -77,6 +79,15 @@ and projects can define their own on top with `task-state create`. If
 `padock task update <id> --status=X` fails because `X` doesn't exist,
 run `padock task-state list --project=<name>` to see what's actually
 available in that task's project.
+
+## If a write returns `{"status":"pending_approval","approvalId":"..."}`
+
+This only happens if the logged-in key was created with "unattended"
+checked (a scheduled/cron-agent key, not the normal default) — the
+write didn't run yet. A human has to approve it on the web `/approvals`
+page before it takes effect. Don't retry the command; if you need to
+know whether it went through, check `padock approvals status <id>`
+later. This is expected behavior for an unattended key, not an error.
 
 ## MCP alternative
 

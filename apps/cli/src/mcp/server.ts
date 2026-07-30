@@ -11,6 +11,7 @@ import { registerChannelTools } from "./tools/channel.ts";
 import { registerTopicTools } from "./tools/topic.ts";
 import { registerUserTools } from "./tools/user.ts";
 import { registerSearchTools } from "./tools/search.ts";
+import { registerApprovalsTools } from "./tools/approvals.ts";
 
 // Full parity with the padock command grammar (§5.2), as an optional
 // richer transport for MCP-capable clients (§5.3/Phase 5) — reuses
@@ -30,6 +31,7 @@ export async function startMcpServer(): Promise<void> {
   registerTopicTools(server, client);
   registerUserTools(server, client);
   registerSearchTools(server, client);
+  registerApprovalsTools(server, client);
 
   server.registerTool(
     "whoami",

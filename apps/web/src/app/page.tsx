@@ -15,6 +15,7 @@ export default function Home() {
   const [log, setLog] = useState<string[]>([]);
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [scopes, setScopes] = useState("");
+  const [unattended, setUnattended] = useState(false);
 
   function append(line: string) {
     setLog((prev) => [...prev, line]);
@@ -65,6 +66,7 @@ export default function Home() {
       const data = await trpc.apikey.create.mutate({
         name: "padock-cli",
         scopes: scopeList.length > 0 ? scopeList : undefined,
+        unattended,
       });
       append(`api-key create: ${JSON.stringify(data)}`);
       setApiKey(data.key);
@@ -139,6 +141,14 @@ export default function Home() {
           value={scopes}
           onChange={(e) => setScopes(e.target.value)}
         />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={unattended}
+            onChange={(e) => setUnattended(e.target.checked)}
+          />
+          Unattended (scheduled/cron agent — writes queue for approval at /approvals)
+        </label>
         <div className="flex gap-2">
           <button className="rounded border px-3 py-1" onClick={createApiKey}>
             Create API key
