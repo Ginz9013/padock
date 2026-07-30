@@ -6,7 +6,7 @@ import { scopedProcedure, router } from "../trpc.ts";
 export const userRouter = router({
   list: scopedProcedure("user", "read").query(async ({ ctx }) => {
     return ctx.db.user.findMany({
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, image: true },
       orderBy: { name: "asc" },
     });
   }),

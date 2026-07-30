@@ -7,7 +7,7 @@ import { getSessionCookie } from "better-auth/cookies";
 // cookie is present (cheap, no DB hit); actual authorization still runs
 // server-side per tRPC call via resolveIdentity (packages/auth).
 const ANON_ONLY_PATHS = ["/", "/login", "/register"];
-const PROTECTED_PREFIXES = ["/dashboard", "/approvals"];
+const PROTECTED_PREFIXES = ["/dashboard", "/approvals", "/chat"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -25,5 +25,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/login", "/register", "/dashboard/:path*", "/approvals/:path*"],
+  matcher: ["/", "/login", "/register", "/dashboard/:path*", "/approvals/:path*", "/chat/:path*"],
 };
