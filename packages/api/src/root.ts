@@ -8,6 +8,8 @@ import { searchRouter } from "./router/search.ts";
 import { channelRouter } from "./router/channel.ts";
 import { topicRouter } from "./router/topic.ts";
 import { taskStateRouter } from "./router/taskState.ts";
+import { apikeyRouter } from "./router/apikey.ts";
+import { approvalRouter } from "./router/approval.ts";
 
 export const appRouter = router({
   health: publicProcedure.query(async ({ ctx }) => {
@@ -26,6 +28,8 @@ export const appRouter = router({
   channel: channelRouter,
   topic: topicRouter,
   taskState: taskStateRouter,
+  apikey: apikeyRouter,
+  approval: approvalRouter,
 });
 
 export type AppRouter = typeof appRouter;

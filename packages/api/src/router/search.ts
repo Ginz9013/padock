@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Prisma } from "@padock/db";
-import { protectedProcedure, router } from "../trpc.ts";
+import { scopedProcedure, router } from "../trpc.ts";
 
 const scopeEnum = z.enum(["docs", "tasks", "chat"]);
 
@@ -22,7 +22,7 @@ interface SearchResult {
 // or GIN index yet — fine at dogfooding scale, a pure perf upgrade
 // later that doesn't change this procedure's shape.
 export const searchRouter = router({
-  search: protectedProcedure
+  search: scopedProcedure("search", "read")
     .input(
       z.object({
         query: z.string().min(1),

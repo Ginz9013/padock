@@ -42,19 +42,19 @@ const connections = new Set<WebSocket>();
 httpServer.on("upgrade", (req, socket, head) => {
   void (async () => {
     const headers = headersFromUpgradeRequest(req.headers);
-    const user = await resolveIdentity(headers);
-    if (!user) {
+    const identity = await resolveIdentity(headers);
+    if (!identity) {
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();
       return;
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      console.log(`[realtime] connected: user=${user.id}`);
+      console.log(`[realtime] connected: user=${identity.user.id}`);
       connections.add(ws);
       ws.on("close", () => {
         connections.delete(ws);
-        console.log(`[realtime] disconnected: user=${user.id}`);
+        console.log(`[realtime] disconnected: user=${identity.user.id}`);
       });
     });
   })();

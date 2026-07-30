@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../trpc.ts";
+import { scopedProcedure, router } from "../trpc.ts";
 import { publishEvent } from "../redis.ts";
+import { runOrQueue } from "../approvalGate.ts";
 
 // DM (recipientId) or channel message (channelId+topicId) — never
 // both. §5.1.3/Phase 4. `projectId` is an optional tag on DMs only
@@ -17,33 +18,35 @@ const channelInput = z.object({
 });
 
 export const chatRouter = router({
-  send: protectedProcedure
+  send: scopedProcedure("chat", "write")
     .input(z.union([dmInput, channelInput]))
-    .mutation(async ({ ctx, input }) => {
-      const message =
-        "recipientId" in input
-          ? await ctx.db.chatMessage.create({
-              data: {
-                senderId: ctx.user.id,
-                recipientId: input.recipientId,
-                content: input.content,
-                projectId: input.projectId,
-              },
-            })
-          : await ctx.db.chatMessage.create({
-              data: {
-                senderId: ctx.user.id,
-                channelId: input.channelId,
-                topicId: input.topicId,
-                content: input.content,
-              },
-            });
+    .mutation(async ({ ctx, input }) =>
+      runOrQueue(ctx, "chat.send", input, async () => {
+        const message =
+          "recipientId" in input
+            ? await ctx.db.chatMessage.create({
+                data: {
+                  senderId: ctx.user.id,
+                  recipientId: input.recipientId,
+                  content: input.content,
+                  projectId: input.projectId,
+                },
+              })
+            : await ctx.db.chatMessage.create({
+                data: {
+                  senderId: ctx.user.id,
+                  channelId: input.channelId,
+                  topicId: input.topicId,
+                  content: input.content,
+                },
+              });
 
-      await publishEvent({ type: "chat.message", message });
-      return message;
-    }),
+        await publishEvent({ type: "chat.message", message });
+        return message;
+      }),
+    ),
 
-  conversation: protectedProcedure
+  conversation: scopedProcedure("chat", "read")
     .input(z.object({ withUserId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.chatMessage.findMany({
@@ -57,7 +60,7 @@ export const chatRouter = router({
       });
     }),
 
-  history: protectedProcedure
+  history: scopedProcedure("chat", "read")
     .input(z.object({ channelId: z.string(), topicId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.chatMessage.findMany({
@@ -70,7 +73,7 @@ export const chatRouter = router({
   // without building real unread/thread tracking (explicitly out of
   // scope, §5.1.3). Explicitly DM-only: recipientId not null, so a
   // channel message the user sent doesn't leak into their DM inbox.
-  inbox: protectedProcedure.query(async ({ ctx }) => {
+  inbox: scopedProcedure("chat", "read").query(async ({ ctx }) => {
     const messages = await ctx.db.chatMessage.findMany({
       where: {
         recipientId: { not: null },
