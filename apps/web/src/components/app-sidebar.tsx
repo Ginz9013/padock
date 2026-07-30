@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { Plus } from "lucide-react";
+import { PanelLeftClose, Pin, PinOff, Plus } from "lucide-react";
 
 import { trpc } from "@/lib/trpc";
+import { usePinnedProjects } from "@/lib/use-pinned-projects";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,15 +21,17 @@ import {
 
 type Project = { id: string; name: string };
 
-// Persistent global nav (CONTEXT.md §5's UX shell): Dashboard, Chat
-// (the standalone /chat/[userId] and /chat/channel/[channelId]
-// thread routes), a project list (Plane's "browse all projects"
-// sidebar section is the reference — every project is small enough
-// in number for v1 that a flat list needs no pinning/search yet), and
-// Approvals.
-export function AppSidebar() {
+// Persistent global nav (CONTEXT.md §5's UX shell): Dashboard, Chat, a
+// project list, and Approvals. Shaped after ChatRightSidebar (this
+// session's UX decision): resizable-by-drag and collapsible via a
+// toggle button in its own top bar rather than the app header, with
+// projects a user pins staying fixed in a "Pinned" section above the
+// full list instead of a recency-based "Recent" section — there's no
+// message-timestamp signal to sort projects by the way DMs have.
+export function AppSidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const [projects, setProjects] = useState<Project[]>([]);
+  const { isPinned, togglePin } = usePinnedProjects();
 
   async function refreshProjects() {
     setProjects(await trpc.project.list.query());
@@ -39,15 +42,26 @@ export function AppSidebar() {
     void refreshProjects();
   }, []);
 
+  // Pinned projects are surfaced once, up top — the full list below
+  // excludes them so nothing is listed twice (same rule ChatRightSidebar
+  // uses to keep "Recent" and "People" from double-listing someone).
+  const pinned = projects.filter((p) => isPinned(p.id));
+  const rest = projects.filter((p) => !isPinned(p.id));
+
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r">
-      <div className="px-4 py-4">
+    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+      <div className="flex items-center gap-1.5 border-b px-3 py-2">
+        {onClose && (
+          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Collapse sidebar">
+            <PanelLeftClose className="size-4" />
+          </Button>
+        )}
         <Link href="/dashboard" className="font-heading text-sm font-semibold">
           Padock
         </Link>
       </div>
 
-      <nav className="flex flex-col gap-0.5 px-2">
+      <nav className="flex flex-col gap-0.5 px-2 py-2">
         <SidebarLink href="/dashboard" active={pathname === "/dashboard"}>
           Dashboard
         </SidebarLink>
@@ -56,31 +70,54 @@ export function AppSidebar() {
         </SidebarLink>
       </nav>
 
-      <div className="mt-4 flex items-center justify-between px-4">
-        <span className="text-xs font-medium text-muted-foreground">Projects</span>
-        <NewProjectDialog onCreated={refreshProjects} />
-      </div>
-      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-1">
-        {projects.map((project) => (
-          <SidebarLink
+      <div className="flex-1 overflow-y-auto px-1.5 pb-2">
+        {pinned.length > 0 && (
+          <>
+            <SectionLabel>Pinned</SectionLabel>
+            {pinned.map((project) => (
+              <ProjectRow
+                key={project.id}
+                project={project}
+                active={pathname.startsWith(`/projects/${project.id}`)}
+                pinned
+                onTogglePin={() => togglePin(project.id)}
+              />
+            ))}
+          </>
+        )}
+
+        <div className="mt-3 flex items-center justify-between px-2 first:mt-2">
+          <span className="text-xs font-medium text-sidebar-foreground/70">Projects</span>
+          <NewProjectDialog onCreated={refreshProjects} />
+        </div>
+        {rest.map((project) => (
+          <ProjectRow
             key={project.id}
-            href={`/projects/${project.id}`}
+            project={project}
             active={pathname.startsWith(`/projects/${project.id}`)}
-          >
-            {project.name}
-          </SidebarLink>
+            pinned={false}
+            onTogglePin={() => togglePin(project.id)}
+          />
         ))}
         {projects.length === 0 && (
-          <p className="px-2 py-1 text-xs text-muted-foreground">No projects yet.</p>
+          <p className="px-2 py-1.5 text-xs text-sidebar-foreground/60">No projects yet.</p>
         )}
-      </nav>
+      </div>
 
       <div className="border-t px-2 py-2">
         <SidebarLink href="/approvals" active={pathname === "/approvals"}>
           Approvals
         </SidebarLink>
       </div>
-    </aside>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="px-2 pt-3 pb-1 text-xs font-medium text-sidebar-foreground/70 first:pt-2">
+      {children}
+    </div>
   );
 }
 
@@ -97,12 +134,53 @@ function SidebarLink({
     <Link
       href={href}
       className={cn(
-        "rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground",
-        active && "bg-muted font-medium text-foreground",
+        "rounded-md px-2 py-1.5 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+        active && "bg-sidebar-accent font-medium text-sidebar-foreground",
       )}
     >
       {children}
     </Link>
+  );
+}
+
+function ProjectRow({
+  project,
+  active,
+  pinned,
+  onTogglePin,
+}: {
+  project: Project;
+  active: boolean;
+  pinned: boolean;
+  onTogglePin: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "group flex items-center rounded-md hover:bg-sidebar-accent",
+        active && "bg-sidebar-accent",
+      )}
+    >
+      <Link
+        href={`/projects/${project.id}`}
+        className={cn(
+          "min-w-0 flex-1 truncate px-2 py-1.5 text-sm text-sidebar-foreground/70",
+          active && "font-medium text-sidebar-foreground",
+        )}
+      >
+        {project.name}
+      </Link>
+      <button
+        onClick={onTogglePin}
+        className={cn(
+          "mr-1.5 shrink-0 text-sidebar-foreground/50 opacity-0 hover:text-sidebar-foreground group-hover:opacity-100",
+          pinned && "opacity-100",
+        )}
+        aria-label={pinned ? "Unpin project" : "Pin project"}
+      >
+        {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+      </button>
+    </div>
   );
 }
 
@@ -128,7 +206,7 @@ function NewProjectDialog({ onCreated }: { onCreated: () => Promise<void> }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <button
-          className="text-muted-foreground hover:text-foreground"
+          className="text-sidebar-foreground/70 hover:text-sidebar-foreground"
           aria-label="New project"
         >
           <Plus className="size-3.5" />
