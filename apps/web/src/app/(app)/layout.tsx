@@ -48,7 +48,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <ChatSidebarProvider>
-      <div className="flex min-h-screen flex-col">
+      <div className="flex h-screen flex-col overflow-hidden">
         <header className="flex w-full shrink-0 items-center justify-end gap-3 border-b px-6 py-3">
           {session?.user && (
             <span className="text-sm text-muted-foreground">{session.user.email}</span>
@@ -69,7 +69,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             Sign out
           </Button>
         </header>
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           <AppSidebar />
           <ResizablePanelGroup orientation="horizontal" className="min-w-0 flex-1">
             <ResizablePanel defaultSize="78" minSize="40">
