@@ -2,15 +2,17 @@ export type TaskState = { id: string; name: string; group: string; position: num
 
 export type TaskPriority = "urgent" | "high" | "medium" | "low" | "none";
 
+export type ProjectMemberSummary = {
+  id: string;
+  userId: string;
+  role: "admin" | "member";
+  user: { id: string; name: string; email: string };
+};
+
 export type TaskAssignee = {
   id: string;
   projectMemberId: string;
-  projectMember: {
-    id: string;
-    userId: string;
-    role: "admin" | "member";
-    user: { id: string; name: string; email: string };
-  };
+  projectMember: ProjectMemberSummary;
 };
 
 export type Task = {

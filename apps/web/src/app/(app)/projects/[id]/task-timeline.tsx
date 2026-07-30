@@ -25,7 +25,13 @@ function shortDate(d: Date) {
 // round, no drag/resize. Only tasks with *both* startDate and endDate get
 // a bar; anything missing a date range simply doesn't appear here (same
 // call as Calendar's "no due date, no cell").
-export function TaskTimeline({ tasks }: { tasks: Task[] }) {
+export function TaskTimeline({
+  tasks,
+  onOpenTask,
+}: {
+  tasks: Task[];
+  onOpenTask: (taskId: string) => void;
+}) {
   const scheduled = tasks.filter((t) => t.startDate && t.endDate);
 
   if (scheduled.length === 0) {
@@ -75,17 +81,24 @@ export function TaskTimeline({ tasks }: { tasks: Task[] }) {
               const endOffset = Math.round((new Date(task.endDate!).getTime() - rangeStartMs) / MS_PER_DAY);
               return (
                 <div key={task.id} className="flex">
-                  <div
-                    className="sticky left-0 z-10 flex h-9 shrink-0 items-center border-r border-b bg-background px-2"
+                  <button
+                    type="button"
+                    onClick={() => onOpenTask(task.id)}
+                    className="sticky left-0 z-10 flex h-9 shrink-0 cursor-pointer items-center border-r border-b bg-background px-2 text-left hover:bg-muted/50"
                     style={{ width: SIDEBAR_WIDTH }}
                   >
                     <p className="truncate text-xs">{task.title}</p>
-                  </div>
+                  </button>
                   <div className="relative h-9 border-b" style={{ width: totalDays * DAY_WIDTH }}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div
-                          className={cn("absolute top-1.5 h-6 rounded-sm", PRIORITY_COLOR[task.priority])}
+                        <button
+                          type="button"
+                          onClick={() => onOpenTask(task.id)}
+                          className={cn(
+                            "absolute top-1.5 h-6 cursor-pointer rounded-sm hover:opacity-80",
+                            PRIORITY_COLOR[task.priority],
+                          )}
                           style={{
                             left: startOffset * DAY_WIDTH,
                             width: (endOffset - startOffset + 1) * DAY_WIDTH - 4,

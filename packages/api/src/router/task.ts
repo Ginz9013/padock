@@ -96,6 +96,23 @@ export const taskRouter = router({
       return task;
     }),
 
+  update: scopedProcedure("task", "write")
+    .input(
+      z.object({
+        id: z.string(),
+        title: z.string().min(1).optional(),
+        description: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      runOrQueue(ctx, "task.update", input, async () => {
+        const { id, ...rest } = input;
+        const task = await ctx.db.task.findUniqueOrThrow({ where: { id } });
+        await assertProjectMember(ctx.db, task.projectId, ctx.user.id);
+        return ctx.db.task.update({ where: { id }, data: rest });
+      }),
+    ),
+
   // Takes a resolved stateId, not a name — name resolution (against
   // the task's own project's states) happens CLI-side, same pattern
   // as project/channel (resolve.ts).

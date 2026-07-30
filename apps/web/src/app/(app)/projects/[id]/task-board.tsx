@@ -63,10 +63,12 @@ export function TaskBoard({
   states,
   tasks,
   onMove,
+  onOpenTask,
 }: {
   states: TaskState[];
   tasks: Task[];
   onMove: (taskId: string, stateId: string) => void | Promise<void>;
+  onOpenTask: (taskId: string) => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const scrollRef = useDragToScroll<HTMLDivElement>();
@@ -87,14 +89,27 @@ export function TaskBoard({
         className="flex h-full min-h-0 cursor-grab gap-4 overflow-x-auto pb-2 active:cursor-grabbing"
       >
         {states.map((state) => (
-          <BoardColumn key={state.id} state={state} tasks={tasks.filter((t) => t.stateId === state.id)} />
+          <BoardColumn
+            key={state.id}
+            state={state}
+            tasks={tasks.filter((t) => t.stateId === state.id)}
+            onOpenTask={onOpenTask}
+          />
         ))}
       </div>
     </DndContext>
   );
 }
 
-function BoardColumn({ state, tasks }: { state: TaskState; tasks: Task[] }) {
+function BoardColumn({
+  state,
+  tasks,
+  onOpenTask,
+}: {
+  state: TaskState;
+  tasks: Task[];
+  onOpenTask: (taskId: string) => void;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: state.id });
 
   return (
@@ -112,14 +127,14 @@ function BoardColumn({ state, tasks }: { state: TaskState; tasks: Task[] }) {
         {tasks.length === 0 ? (
           <p className="px-1 text-xs text-muted-foreground">No tasks.</p>
         ) : (
-          tasks.map((task) => <BoardCard key={task.id} task={task} />)
+          tasks.map((task) => <BoardCard key={task.id} task={task} onOpenTask={onOpenTask} />)
         )}
       </div>
     </div>
   );
 }
 
-function BoardCard({ task }: { task: Task }) {
+function BoardCard({ task, onOpenTask }: { task: Task; onOpenTask: (taskId: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
 
@@ -130,6 +145,7 @@ function BoardCard({ task }: { task: Task }) {
       style={style}
       {...listeners}
       {...attributes}
+      onClick={() => onOpenTask(task.id)}
       className={`cursor-grab touch-none rounded-md border bg-card px-3 py-2 shadow-sm active:cursor-grabbing ${
         isDragging ? "opacity-50" : ""
       }`}

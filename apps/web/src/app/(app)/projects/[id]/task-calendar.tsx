@@ -35,9 +35,11 @@ function addMonthsUTC(d: Date, delta: number) {
 export function TaskCalendar({
   tasks,
   onChangeDate,
+  onOpenTask,
 }: {
   tasks: Task[];
   onChangeDate: (taskId: string, field: "startDate" | "endDate", dateKey: string) => void | Promise<void>;
+  onOpenTask: (taskId: string) => void;
 }) {
   const today = new Date();
   const [month, setMonth] = useState(() => startOfMonthUTC(today.getUTCFullYear(), today.getUTCMonth()));
@@ -115,6 +117,7 @@ export function TaskCalendar({
                 inMonth={date.getUTCMonth() === month.getUTCMonth()}
                 isToday={key === todayKey}
                 tasks={tasksByDate.get(key) ?? []}
+                onOpenTask={onOpenTask}
               />
             );
           })}
@@ -130,12 +133,14 @@ function DayCell({
   inMonth,
   isToday,
   tasks,
+  onOpenTask,
 }: {
   date: Date;
   dateKey: string;
   inMonth: boolean;
   isToday: boolean;
   tasks: Task[];
+  onOpenTask: (taskId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: dateKey });
 
@@ -157,13 +162,13 @@ function DayCell({
         {date.getUTCDate()}
       </span>
       {tasks.map((task) => (
-        <CalendarCard key={task.id} task={task} />
+        <CalendarCard key={task.id} task={task} onOpenTask={onOpenTask} />
       ))}
     </div>
   );
 }
 
-function CalendarCard({ task }: { task: Task }) {
+function CalendarCard({ task, onOpenTask }: { task: Task; onOpenTask: (taskId: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
 
@@ -173,6 +178,7 @@ function CalendarCard({ task }: { task: Task }) {
       style={style}
       {...listeners}
       {...attributes}
+      onClick={() => onOpenTask(task.id)}
       className={cn(
         "cursor-grab touch-none truncate rounded bg-card px-1.5 py-0.5 text-[11px] shadow-sm active:cursor-grabbing",
         isDragging && "opacity-50",

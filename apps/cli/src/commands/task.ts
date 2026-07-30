@@ -3,6 +3,7 @@ import { createClient, run } from "../client.ts";
 import {
   createTask,
   listTasks,
+  editTask,
   updateTaskStatus,
   updateTaskPriority,
   updateTaskDates,
@@ -57,6 +58,15 @@ export function registerTaskCommands(program: Command): void {
     .action(async (id: string, opts: { status: string }) => {
       const client = createClient();
       await run(() => updateTaskStatus(client, { id, status: opts.status }));
+    });
+
+  task
+    .command("edit <id>")
+    .option("--title <title>")
+    .option("--description <text>")
+    .action(async (id: string, opts: { title?: string; description?: string }) => {
+      const client = createClient();
+      await run(() => editTask(client, { id, ...opts }));
     });
 
   task

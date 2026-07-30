@@ -18,11 +18,13 @@ export function TaskTable({
   tasks,
   onChangeState,
   onChangePriority,
+  onOpenTask,
 }: {
   states: TaskState[];
   tasks: Task[];
   onChangeState: (taskId: string, stateId: string) => void | Promise<void>;
   onChangePriority: (taskId: string, priority: TaskPriority) => void | Promise<void>;
+  onOpenTask: (taskId: string) => void;
 }) {
   const stateById = new Map(states.map((s) => [s.id, s]));
 
@@ -49,7 +51,15 @@ export function TaskTable({
           ) : (
             tasks.map((task) => (
               <tr key={task.id} className="border-b last:border-0">
-                <td className="max-w-64 truncate px-3 py-2">{task.title}</td>
+                <td className="max-w-64 truncate p-0">
+                  <button
+                    type="button"
+                    onClick={() => onOpenTask(task.id)}
+                    className="block w-full cursor-pointer truncate px-3 py-2 text-left hover:bg-muted/50"
+                  >
+                    {task.title}
+                  </button>
+                </td>
                 <td className="px-3 py-2">
                   <Select value={task.stateId} onValueChange={(v) => onChangeState(task.id, v)}>
                     <SelectTrigger size="sm" className="w-36">

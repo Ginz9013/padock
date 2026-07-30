@@ -29,7 +29,8 @@ import { TaskBoard } from "./task-board";
 import { TaskTable } from "./task-table";
 import { TaskCalendar } from "./task-calendar";
 import { TaskTimeline } from "./task-timeline";
-import type { Task, TaskPriority, TaskState } from "./task-types";
+import { TaskDetailModal } from "./task-detail-modal";
+import type { ProjectMemberSummary, Task, TaskPriority, TaskState } from "./task-types";
 
 const VIEWS = [
   { key: "list", label: "List" },
@@ -55,14 +56,18 @@ export default function ProjectTaskPage() {
   const view: View = (VIEW_KEYS.includes(viewParam ?? "") ? viewParam : "list") as View;
   const [states, setStates] = useState<TaskState[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [members, setMembers] = useState<ProjectMemberSummary[]>([]);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
 
   async function refresh() {
-    const [stateList, taskList] = await Promise.all([
+    const [stateList, taskList, memberList] = await Promise.all([
       trpc.taskState.list.query({ projectId }),
       trpc.task.list.query({ projectId }),
+      trpc.project.listMembers.query({ projectId }),
     ]);
     setStates([...stateList].sort((a, b) => a.position - b.position));
     setTasks(taskList);
+    setMembers(memberList);
   }
 
   useEffect(() => {
@@ -102,14 +107,34 @@ export default function ProjectTaskPage() {
       </div>
 
       <div className="min-h-0 flex-1">
-        {view === "board" && <TaskBoard states={states} tasks={tasks} onMove={changeState} />}
-        {view === "table" && (
-          <TaskTable states={states} tasks={tasks} onChangeState={changeState} onChangePriority={changePriority} />
+        {view === "board" && (
+          <TaskBoard states={states} tasks={tasks} onMove={changeState} onOpenTask={setOpenTaskId} />
         )}
-        {view === "calendar" && <TaskCalendar tasks={tasks} onChangeDate={changeDate} />}
-        {view === "timeline" && <TaskTimeline tasks={tasks} />}
-        {view === "list" && <TaskListView states={states} tasks={tasks} onChangeState={changeState} />}
+        {view === "table" && (
+          <TaskTable
+            states={states}
+            tasks={tasks}
+            onChangeState={changeState}
+            onChangePriority={changePriority}
+            onOpenTask={setOpenTaskId}
+          />
+        )}
+        {view === "calendar" && (
+          <TaskCalendar tasks={tasks} onChangeDate={changeDate} onOpenTask={setOpenTaskId} />
+        )}
+        {view === "timeline" && <TaskTimeline tasks={tasks} onOpenTask={setOpenTaskId} />}
+        {view === "list" && (
+          <TaskListView states={states} tasks={tasks} onChangeState={changeState} onOpenTask={setOpenTaskId} />
+        )}
       </div>
+
+      <TaskDetailModal
+        task={tasks.find((t) => t.id === openTaskId) ?? null}
+        states={states}
+        members={members}
+        onClose={() => setOpenTaskId(null)}
+        onChanged={refresh}
+      />
     </div>
   );
 }
@@ -138,10 +163,12 @@ function TaskListView({
   states,
   tasks,
   onChangeState,
+  onOpenTask,
 }: {
   states: TaskState[];
   tasks: Task[];
   onChangeState: (taskId: string, stateId: string) => Promise<void>;
+  onOpenTask: (taskId: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -162,14 +189,18 @@ function TaskListView({
                     key={task.id}
                     className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
                   >
-                    <div className="min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => onOpenTask(task.id)}
+                      className="min-w-0 flex-1 cursor-pointer text-left"
+                    >
                       <p className="truncate text-sm">{task.title}</p>
                       {task.description && (
                         <p className="truncate text-xs text-muted-foreground">
                           {task.description}
                         </p>
                       )}
-                    </div>
+                    </button>
                     <Select value={task.stateId} onValueChange={(v) => onChangeState(task.id, v)}>
                       <SelectTrigger size="sm" className="w-36 shrink-0">
                         <SelectValue />

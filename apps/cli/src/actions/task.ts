@@ -49,6 +49,10 @@ export async function listTasks(client: Client, args: { project: string }) {
   return client.task.list.query({ projectId });
 }
 
+export async function editTask(client: Client, args: { id: string; title?: string; description?: string }) {
+  return client.task.update.mutate({ id: args.id, title: args.title, description: args.description });
+}
+
 export async function updateTaskStatus(client: Client, args: { id: string; status: string }) {
   const existing = await client.task.get.query({ id: args.id });
   const stateId = await resolveTaskStateId(client, existing.projectId, args.status);

@@ -4,6 +4,7 @@ import type { createClient } from "../../client.ts";
 import {
   createTask,
   listTasks,
+  editTask,
   updateTaskStatus,
   updateTaskPriority,
   updateTaskDates,
@@ -50,6 +51,15 @@ export function registerTaskTools(server: McpServer, client: Client): void {
       inputSchema: { id: z.string(), status: z.string() },
     },
     async (args) => toolResult(() => updateTaskStatus(client, args)),
+  );
+
+  server.registerTool(
+    "task_edit",
+    {
+      description: "Edit a task's title and/or description.",
+      inputSchema: { id: z.string(), title: z.string().optional(), description: z.string().optional() },
+    },
+    async (args) => toolResult(() => editTask(client, args)),
   );
 
   server.registerTool(
