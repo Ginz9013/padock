@@ -84,7 +84,7 @@ export function TaskBoard({
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
       <div
         ref={scrollRef}
-        className="scrollbar-none flex h-full min-h-0 cursor-grab gap-4 overflow-x-auto pb-2 active:cursor-grabbing"
+        className="flex h-full min-h-0 cursor-grab gap-4 overflow-x-auto pb-2 active:cursor-grabbing"
       >
         {states.map((state) => (
           <BoardColumn key={state.id} state={state} tasks={tasks.filter((t) => t.stateId === state.id)} />

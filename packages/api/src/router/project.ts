@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { scopedProcedure, router } from "../trpc.ts";
 import { runOrQueue } from "../approvalGate.ts";
-import { assertProjectAdmin, assertProjectMember } from "../projectAccess.ts";
+import { assertKeepsAnAdmin, assertProjectAdmin, assertProjectMember } from "../projectAccess.ts";
 
 // Plane-style default workflow (CONTEXT.md §5.1.5) — seeded on every
 // new project so it's immediately usable, not stuck with zero valid
@@ -94,6 +94,12 @@ export const projectRouter = router({
         if (!targetUser) {
           throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
         }
+        const existing = await ctx.db.projectMember.findUnique({
+          where: { projectId_userId: { projectId: input.projectId, userId: input.userId } },
+        });
+        if (existing?.role === "admin" && input.role === "member") {
+          await assertKeepsAnAdmin(ctx.db, input.projectId);
+        }
         return ctx.db.projectMember.upsert({
           where: { projectId_userId: { projectId: input.projectId, userId: input.userId } },
           create: { projectId: input.projectId, userId: input.userId, role: input.role },
@@ -116,15 +122,7 @@ export const projectRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "User is not a member of this project" });
         }
         if (target.role === "admin") {
-          const adminCount = await ctx.db.projectMember.count({
-            where: { projectId: input.projectId, role: "admin" },
-          });
-          if (adminCount <= 1) {
-            throw new TRPCError({
-              code: "PRECONDITION_FAILED",
-              message: "Can't remove the project's last admin",
-            });
-          }
+          await assertKeepsAnAdmin(ctx.db, input.projectId);
         }
         return ctx.db.projectMember.delete({
           where: { projectId_userId: { projectId: input.projectId, userId: input.userId } },

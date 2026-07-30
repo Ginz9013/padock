@@ -200,7 +200,7 @@ function ProjectRow({
           <ChevronRight className={cn("size-3.5 transition-transform", expanded && "rotate-90")} />
         </button>
         <Link
-          href={base}
+          href={`${base}/overview`}
           className={cn(
             "min-w-0 flex-1 truncate py-1.5 pr-2 text-sm text-sidebar-foreground/70",
             active && "font-medium text-sidebar-foreground",

@@ -22,3 +22,13 @@ export async function assertProjectAdmin(db: PrismaClient, projectId: string, us
   }
   return membership;
 }
+
+// Shared by removeMember (deleting an admin) and addMember (demoting one
+// via role change) — both would otherwise leave a project with zero
+// admins and nobody able to manage its membership ever again.
+export async function assertKeepsAnAdmin(db: PrismaClient, projectId: string) {
+  const adminCount = await db.projectMember.count({ where: { projectId, role: "admin" } });
+  if (adminCount <= 1) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Can't remove the project's last admin" });
+  }
+}
