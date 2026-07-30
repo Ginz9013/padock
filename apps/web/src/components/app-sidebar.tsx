@@ -20,10 +20,12 @@ import {
 
 type Project = { id: string; name: string };
 
-// Persistent global nav (CONTEXT.md §5's UX shell): Dashboard, a
-// project list (Plane's "browse all projects" sidebar section is the
-// reference — every project is small enough in number for v1 that a
-// flat list needs no pinning/search yet), and Approvals.
+// Persistent global nav (CONTEXT.md §5's UX shell): Dashboard, Chat
+// (the standalone /chat/[userId] and /chat/channel/[channelId]
+// thread routes), a project list (Plane's "browse all projects"
+// sidebar section is the reference — every project is small enough
+// in number for v1 that a flat list needs no pinning/search yet), and
+// Approvals.
 export function AppSidebar() {
   const pathname = usePathname();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -48,6 +50,9 @@ export function AppSidebar() {
       <nav className="flex flex-col gap-0.5 px-2">
         <SidebarLink href="/dashboard" active={pathname === "/dashboard"}>
           Dashboard
+        </SidebarLink>
+        <SidebarLink href="/chat" active={pathname.startsWith("/chat")}>
+          Chat
         </SidebarLink>
       </nav>
 

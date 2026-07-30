@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 
 import { useSession } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
@@ -40,7 +40,7 @@ type ChatSidebarValue = {
   // right sidebar, which — unlike ChatThread — is mounted on every
   // page (this session's UX decision: chat surface is global, the
   // same way the left AppSidebar's Projects list is), so it routes to
-  // /dashboard first if the actual thread view isn't already showing.
+  // this user's own /chat/[userId] route.
   openDm: (user: OrgUser) => void;
 };
 
@@ -55,17 +55,19 @@ export function useChatSidebar(): ChatSidebarValue {
 // Lifted out of the Dashboard page (CONTEXT.md §5.1.9/§5.1.10's chat
 // feed) so the org-wide People list can live in a persistent right
 // sidebar across every page while the actual DM/channel thread view
-// (ChatThread) stays Dashboard-only, per this session's scope call —
-// both need the same conversations/selected/unread state.
+// (ChatThread) lives on its own /chat/[userId] and
+// /chat/channel/[channelId] routes (this session's UX decision — chat
+// is a standalone screen now, not squeezed into Dashboard) — both
+// need the same conversations/selected/unread state.
 export function ChatSidebarProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const params = useParams<{ userId?: string; channelId?: string }>();
   const profiles = useUserProfiles();
   const { noteLatest, markRead, isUnread, latest } = useUnread();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [people, setPeople] = useState<OrgUser[]>([]);
-  const [selected, setSelected] = useState<Conversation | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -129,12 +131,41 @@ export function ChatSidebarProvider({ children }: { children: ReactNode }) {
     ),
   );
 
+  // Selected conversation is derived from the URL rather than kept as
+  // its own state: the thread view is now whatever /chat/[userId] or
+  // /chat/channel/[channelId] the user is actually on, so a direct
+  // link, a refresh, or browser back/forward all land on the right
+  // thread with nothing extra to keep in sync.
+  const channelIdInUrl = pathname.startsWith("/chat/channel/") ? params.channelId : undefined;
+  const userIdInUrl =
+    pathname.startsWith("/chat/") && !pathname.startsWith("/chat/channel/") ? params.userId : undefined;
+
+  const selected: Conversation | null = channelIdInUrl
+    ? (conversations.find((c) => c.key === `channel:${channelIdInUrl}`) ?? {
+        kind: "channel",
+        key: `channel:${channelIdInUrl}`,
+        channelId: channelIdInUrl,
+        label: channelIdInUrl,
+      })
+    : userIdInUrl
+      ? (conversations.find((c) => c.key === `dm:${userIdInUrl}`) ?? {
+          kind: "dm",
+          key: `dm:${userIdInUrl}`,
+          withUserId: userIdInUrl,
+          label: profiles.get(userIdInUrl)?.name ?? userIdInUrl,
+        })
+      : null;
+
+  useEffect(() => {
+    if (selected) markRead(selected.key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.key]);
+
   const selectConversation = useCallback(
     (c: Conversation) => {
-      setSelected(c);
-      markRead(c.key);
+      router.push(c.kind === "dm" ? `/chat/${c.withUserId}` : `/chat/channel/${c.channelId}`);
     },
-    [markRead],
+    [router],
   );
 
   const openDm = useCallback(
@@ -145,11 +176,9 @@ export function ChatSidebarProvider({ children }: { children: ReactNode }) {
           ? prev
           : [{ kind: "dm", key, withUserId: user.id, label: user.name }, ...prev],
       );
-      setSelected({ kind: "dm", key, withUserId: user.id, label: user.name });
-      markRead(key);
-      if (pathname !== "/dashboard") router.push("/dashboard");
+      router.push(`/chat/${user.id}`);
     },
-    [markRead, pathname, router],
+    [router],
   );
 
   return (
