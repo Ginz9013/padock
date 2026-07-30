@@ -1,19 +1,16 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 import { authClient, useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { AppSidebar } from "@/components/app-sidebar";
 
-const NAV_LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/approvals", label: "Approvals" },
-];
-
+// Sidebar-first shell, not a top-nav bar (this session's UX decision,
+// CONTEXT.md §5's UX shell): the app is organized by "where you are"
+// (Dashboard / a Project) rather than by domain module, so the
+// project list belongs in the persistent nav, not a dropdown.
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
 
@@ -23,37 +20,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-6">
-            <span className="font-heading text-sm font-semibold">Padock</span>
-            <nav className="flex items-center gap-4">
-              {NAV_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={cn(
-                    "text-sm text-muted-foreground hover:text-foreground",
-                    pathname.startsWith(link.href) && "font-medium text-foreground"
-                  )}
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-          <div className="flex items-center gap-3">
-            {session?.user && (
-              <span className="text-sm text-muted-foreground">{session.user.email}</span>
-            )}
-            <Button variant="outline" size="sm" onClick={handleSignOut}>
-              Sign out
-            </Button>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">{children}</main>
+    <div className="flex min-h-screen">
+      <AppSidebar />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-end gap-3 border-b px-6 py-3">
+          {session?.user && (
+            <span className="text-sm text-muted-foreground">{session.user.email}</span>
+          )}
+          <Button variant="outline" size="sm" onClick={handleSignOut}>
+            Sign out
+          </Button>
+        </header>
+        <main className="min-w-0 flex-1 overflow-y-auto px-6 py-8">{children}</main>
+      </div>
     </div>
   );
 }
