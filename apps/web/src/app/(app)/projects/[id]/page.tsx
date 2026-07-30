@@ -76,8 +76,8 @@ export default function ProjectTaskPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full min-h-0 flex-col gap-6">
+      <div className="flex shrink-0 items-center justify-between">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-medium text-muted-foreground">Tasks</h2>
           <ViewSwitcher view={view} onChange={setView} />
@@ -85,11 +85,13 @@ export default function ProjectTaskPage() {
         <NewTaskDialog projectId={projectId} onCreated={refresh} />
       </div>
 
-      {view === "board" ? (
-        <TaskBoard states={states} tasks={tasks} onMove={changeState} />
-      ) : (
-        <TaskListView states={states} tasks={tasks} onChangeState={changeState} />
-      )}
+      <div className="min-h-0 flex-1">
+        {view === "board" ? (
+          <TaskBoard states={states} tasks={tasks} onMove={changeState} />
+        ) : (
+          <TaskListView states={states} tasks={tasks} onChangeState={changeState} />
+        )}
+      </div>
     </div>
   );
 }
