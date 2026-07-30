@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { scopedProcedure, router } from "../trpc.ts";
+import { runOrQueue } from "../approvalGate.ts";
 
 export const taskRouter = router({
   create: scopedProcedure("task", "write")
@@ -11,26 +12,28 @@ export const taskRouter = router({
         description: z.string().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
-      const defaultState = await ctx.db.taskState.findFirst({
-        where: { projectId: input.projectId, isDefault: true },
-      });
-      if (!defaultState) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Project has no default task state — create one with task-state create first",
+    .mutation(async ({ ctx, input }) =>
+      runOrQueue(ctx, "task.create", input, async () => {
+        const defaultState = await ctx.db.taskState.findFirst({
+          where: { projectId: input.projectId, isDefault: true },
         });
-      }
-      return ctx.db.task.create({
-        data: {
-          projectId: input.projectId,
-          title: input.title,
-          description: input.description,
-          stateId: defaultState.id,
-          createdById: ctx.user.id,
-        },
-      });
-    }),
+        if (!defaultState) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Project has no default task state — create one with task-state create first",
+          });
+        }
+        return ctx.db.task.create({
+          data: {
+            projectId: input.projectId,
+            title: input.title,
+            description: input.description,
+            stateId: defaultState.id,
+            createdById: ctx.user.id,
+          },
+        });
+      }),
+    ),
 
   list: scopedProcedure("task", "read")
     .input(z.object({ projectId: z.string() }))
@@ -52,10 +55,12 @@ export const taskRouter = router({
   // as project/channel (resolve.ts).
   updateState: scopedProcedure("task", "write")
     .input(z.object({ id: z.string(), stateId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.db.task.update({
-        where: { id: input.id },
-        data: { stateId: input.stateId },
-      });
-    }),
+    .mutation(async ({ ctx, input }) =>
+      runOrQueue(ctx, "task.updateState", input, () =>
+        ctx.db.task.update({
+          where: { id: input.id },
+          data: { stateId: input.stateId },
+        }),
+      ),
+    ),
 });

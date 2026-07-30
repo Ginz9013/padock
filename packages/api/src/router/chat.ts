@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { scopedProcedure, router } from "../trpc.ts";
 import { publishEvent } from "../redis.ts";
+import { runOrQueue } from "../approvalGate.ts";
 
 // DM (recipientId) or channel message (channelId+topicId) — never
 // both. §5.1.3/Phase 4. `projectId` is an optional tag on DMs only
@@ -19,29 +20,31 @@ const channelInput = z.object({
 export const chatRouter = router({
   send: scopedProcedure("chat", "write")
     .input(z.union([dmInput, channelInput]))
-    .mutation(async ({ ctx, input }) => {
-      const message =
-        "recipientId" in input
-          ? await ctx.db.chatMessage.create({
-              data: {
-                senderId: ctx.user.id,
-                recipientId: input.recipientId,
-                content: input.content,
-                projectId: input.projectId,
-              },
-            })
-          : await ctx.db.chatMessage.create({
-              data: {
-                senderId: ctx.user.id,
-                channelId: input.channelId,
-                topicId: input.topicId,
-                content: input.content,
-              },
-            });
+    .mutation(async ({ ctx, input }) =>
+      runOrQueue(ctx, "chat.send", input, async () => {
+        const message =
+          "recipientId" in input
+            ? await ctx.db.chatMessage.create({
+                data: {
+                  senderId: ctx.user.id,
+                  recipientId: input.recipientId,
+                  content: input.content,
+                  projectId: input.projectId,
+                },
+              })
+            : await ctx.db.chatMessage.create({
+                data: {
+                  senderId: ctx.user.id,
+                  channelId: input.channelId,
+                  topicId: input.topicId,
+                  content: input.content,
+                },
+              });
 
-      await publishEvent({ type: "chat.message", message });
-      return message;
-    }),
+        await publishEvent({ type: "chat.message", message });
+        return message;
+      }),
+    ),
 
   conversation: scopedProcedure("chat", "read")
     .input(z.object({ withUserId: z.string() }))

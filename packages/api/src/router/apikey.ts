@@ -18,6 +18,11 @@ export const apikeyRouter = router({
       z.object({
         name: z.string().min(1),
         scopes: z.array(z.string()).optional(),
+        // Phase 6b: flags a key as belonging to a scheduled/cron-type
+        // agent with nobody watching its conversation turn — every
+        // write it attempts gets queued for approval instead of
+        // executing immediately (packages/api/src/approvalGate.ts).
+        unattended: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -41,6 +46,7 @@ export const apikeyRouter = router({
           name: input.name,
           userId: ctx.user.id,
           ...(permissions ? { permissions } : {}),
+          ...(input.unattended ? { metadata: { unattended: true } } : {}),
         },
       });
 
@@ -49,6 +55,7 @@ export const apikeyRouter = router({
         id: result.id,
         name: result.name,
         permissions: result.permissions ?? null,
+        unattended: input.unattended ?? false,
       };
     }),
 });

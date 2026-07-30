@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { scopedProcedure, router } from "../trpc.ts";
+import { runOrQueue } from "../approvalGate.ts";
 
 // Plane-style default workflow (CONTEXT.md §5.1.5) — seeded on every
 // new project so it's immediately usable, not stuck with zero valid
@@ -19,22 +20,24 @@ const DEFAULT_TASK_STATES = [
 export const projectRouter = router({
   create: scopedProcedure("project", "write")
     .input(z.object({ name: z.string().min(1) }))
-    .mutation(async ({ ctx, input }) => {
-      const org = await ctx.db.organization.findFirstOrThrow();
-      const project = await ctx.db.project.create({
-        data: { name: input.name, organizationId: org.id },
-      });
-      await ctx.db.taskState.createMany({
-        data: DEFAULT_TASK_STATES.map((s, position) => ({
-          projectId: project.id,
-          name: s.name,
-          group: s.group,
-          position,
-          isDefault: s.isDefault ?? false,
-        })),
-      });
-      return project;
-    }),
+    .mutation(async ({ ctx, input }) =>
+      runOrQueue(ctx, "project.create", input, async () => {
+        const org = await ctx.db.organization.findFirstOrThrow();
+        const project = await ctx.db.project.create({
+          data: { name: input.name, organizationId: org.id },
+        });
+        await ctx.db.taskState.createMany({
+          data: DEFAULT_TASK_STATES.map((s, position) => ({
+            projectId: project.id,
+            name: s.name,
+            group: s.group,
+            position,
+            isDefault: s.isDefault ?? false,
+          })),
+        });
+        return project;
+      }),
+    ),
 
   list: scopedProcedure("project", "read").query(async ({ ctx }) => {
     return ctx.db.project.findMany({ orderBy: { createdAt: "desc" } });

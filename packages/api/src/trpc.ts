@@ -28,6 +28,7 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
       user: ctx.identity.user,
       authMethod: ctx.identity.authMethod,
       scopes: ctx.identity.scopes,
+      unattended: ctx.identity.unattended,
     },
   });
 });

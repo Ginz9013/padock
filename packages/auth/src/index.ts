@@ -19,7 +19,9 @@ export const auth = betterAuth({
     // and every action is human-approved in the same session, so
     // there's nothing an artificial request quota adds. Disabled, not
     // just raised, since there's no rate-limit-shaped problem here yet.
-    apiKey({ rateLimit: { enabled: false } }),
+    // metadata is off by default too; Phase 6b stores the `unattended`
+    // flag there (packages/api/src/router/apikey.ts).
+    apiKey({ rateLimit: { enabled: false }, enableMetadata: true }),
   ],
   databaseHooks: {
     user: {
@@ -79,6 +81,10 @@ export type ResolvedIdentity = {
   user: PadockUser;
   authMethod: "session" | "apikey";
   scopes: Record<string, string[]> | null;
+  // Phase 6b: a key created with `unattended: true` — writes it
+  // attempts get queued for approval instead of executing immediately
+  // (packages/api/src/approvalGate.ts). Always false for session auth.
+  unattended: boolean;
 };
 
 /**
@@ -92,7 +98,7 @@ export type ResolvedIdentity = {
 export async function resolveIdentity(headers: Headers): Promise<ResolvedIdentity | null> {
   const session = await auth.api.getSession({ headers });
   if (session) {
-    return { user: session.user, authMethod: "session", scopes: null };
+    return { user: session.user, authMethod: "session", scopes: null, unattended: false };
   }
 
   const key = headers.get("x-api-key");
@@ -101,7 +107,12 @@ export async function resolveIdentity(headers: Headers): Promise<ResolvedIdentit
     if (result.valid && result.key) {
       const user = await prisma.user.findUnique({ where: { id: result.key.referenceId } });
       if (user) {
-        return { user, authMethod: "apikey", scopes: result.key.permissions ?? null };
+        return {
+          user,
+          authMethod: "apikey",
+          scopes: result.key.permissions ?? null,
+          unattended: result.key.metadata?.["unattended"] === true,
+        };
       }
     }
   }
