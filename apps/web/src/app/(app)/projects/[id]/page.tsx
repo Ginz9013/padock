@@ -26,15 +26,20 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { TaskBoard } from "./task-board";
-
-type TaskState = { id: string; name: string; group: string; position: number; isDefault: boolean };
-type Task = { id: string; title: string; description: string | null; stateId: string };
+import { TaskTable } from "./task-table";
+import { TaskCalendar } from "./task-calendar";
+import { TaskTimeline } from "./task-timeline";
+import type { Task, TaskPriority, TaskState } from "./task-types";
 
 const VIEWS = [
   { key: "list", label: "List" },
   { key: "board", label: "Board" },
+  { key: "table", label: "Table" },
+  { key: "calendar", label: "Calendar" },
+  { key: "timeline", label: "Timeline" },
 ] as const;
 type View = (typeof VIEWS)[number]["key"];
+const VIEW_KEYS: readonly string[] = VIEWS.map((v) => v.key);
 
 // The project workspace's task view (Plane's work-item list/board are the
 // reference, CONTEXT.md §5's UX shell) — grouped by that project's own
@@ -46,7 +51,8 @@ export default function ProjectTaskPage() {
   const { id: projectId } = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const view: View = searchParams.get("view") === "board" ? "board" : "list";
+  const viewParam = searchParams.get("view");
+  const view: View = (VIEW_KEYS.includes(viewParam ?? "") ? viewParam : "list") as View;
   const [states, setStates] = useState<TaskState[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
 
@@ -69,6 +75,16 @@ export default function ProjectTaskPage() {
     await refresh();
   }
 
+  async function changePriority(taskId: string, priority: TaskPriority) {
+    await trpc.task.updatePriority.mutate({ id: taskId, priority });
+    await refresh();
+  }
+
+  async function changeDate(taskId: string, field: "startDate" | "endDate", dateKey: string) {
+    await trpc.task.updateDates.mutate({ id: taskId, [field]: dateKey });
+    await refresh();
+  }
+
   function setView(next: View) {
     const params = new URLSearchParams(searchParams);
     params.set("view", next);
@@ -86,11 +102,13 @@ export default function ProjectTaskPage() {
       </div>
 
       <div className="min-h-0 flex-1">
-        {view === "board" ? (
-          <TaskBoard states={states} tasks={tasks} onMove={changeState} />
-        ) : (
-          <TaskListView states={states} tasks={tasks} onChangeState={changeState} />
+        {view === "board" && <TaskBoard states={states} tasks={tasks} onMove={changeState} />}
+        {view === "table" && (
+          <TaskTable states={states} tasks={tasks} onChangeState={changeState} onChangePriority={changePriority} />
         )}
+        {view === "calendar" && <TaskCalendar tasks={tasks} onChangeDate={changeDate} />}
+        {view === "timeline" && <TaskTimeline tasks={tasks} />}
+        {view === "list" && <TaskListView states={states} tasks={tasks} onChangeState={changeState} />}
       </div>
     </div>
   );

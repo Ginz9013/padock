@@ -5,6 +5,7 @@ import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSe
 import type { DragEndEvent } from "@dnd-kit/core";
 
 import { Badge } from "@/components/ui/badge";
+import type { Task, TaskState } from "./task-types";
 
 // Click-and-drag panning for the horizontal scroll area, since the
 // scrollbar itself is hidden (visually noisy for something this wide).
@@ -54,9 +55,6 @@ function useDragToScroll<T extends HTMLElement>() {
 
   return ref;
 }
-
-type TaskState = { id: string; name: string; group: string; position: number; isDefault: boolean };
-type Task = { id: string; title: string; description: string | null; stateId: string };
 
 // Columns = the project's own TaskStates (§5.1.5), same grouping the List
 // view already uses — dragging a card only changes `stateId`, there's no
