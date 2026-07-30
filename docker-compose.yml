@@ -1,3 +1,11 @@
+# Pinned explicitly: Compose otherwise derives the project name from
+# this file's containing directory. This file used to live in docker/,
+# so the existing named volumes (postgres-data etc.) are already
+# prefixed docker_ — pinning keeps `docker compose up` here reattaching
+# to that same data instead of silently creating fresh empty volumes
+# under a new padock_ prefix.
+name: docker
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -44,11 +52,11 @@ services:
 
   app:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: .
+      dockerfile: Dockerfile
       target: app
     restart: unless-stopped
-    env_file: ../.env
+    env_file: .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       REDIS_URL: redis://redis:6379
@@ -62,11 +70,11 @@ services:
 
   realtime:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: .
+      dockerfile: Dockerfile
       target: realtime
     restart: unless-stopped
-    env_file: ../.env
+    env_file: .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       REDIS_URL: redis://redis:6379
@@ -82,11 +90,11 @@ services:
 
   worker:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: .
+      dockerfile: Dockerfile
       target: worker
     restart: unless-stopped
-    env_file: ../.env
+    env_file: .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       REDIS_URL: redis://redis:6379

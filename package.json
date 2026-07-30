@@ -16,9 +16,9 @@
     "db:migrate:status": "dotenv -e .env -- pnpm --filter @padock/db migrate:status",
     "db:studio": "dotenv -e .env -- pnpm --filter @padock/db studio",
     "auth:generate": "dotenv -e .env -- pnpm --filter @padock/auth exec auth generate --config ./src/index.ts --output ../db/prisma/schema.prisma -y",
-    "docker:up": "docker compose --env-file .env -f docker/docker-compose.yml up --build",
-    "docker:down": "docker compose --env-file .env -f docker/docker-compose.yml down",
-    "docker:logs": "docker compose --env-file .env -f docker/docker-compose.yml logs -f"
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
   },
   "devDependencies": {
     "dotenv-cli": "^8.0.0",
