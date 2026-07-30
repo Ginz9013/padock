@@ -22,14 +22,8 @@ export async function resolveUserId(client: Client, value: string): Promise<stri
 
 export async function resolveChannelId(client: Client, nameOrId: string): Promise<string> {
   const channels = await client.channel.list.query();
-  const match = channels.find((c) => c.name.toLowerCase() === nameOrId.toLowerCase());
+  const match = channels.find((c) => c.title.toLowerCase() === nameOrId.toLowerCase());
   return match ? match.id : nameOrId;
-}
-
-export async function resolveTopicId(client: Client, channelId: string, titleOrId: string): Promise<string> {
-  const topics = await client.topic.list.query({ channelId });
-  const match = topics.find((t) => t.title.toLowerCase() === titleOrId.toLowerCase());
-  return match ? match.id : titleOrId;
 }
 
 export async function resolveTaskStateId(client: Client, projectId: string, nameOrId: string): Promise<string> {

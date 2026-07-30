@@ -8,7 +8,6 @@ import { registerTaskStateTools } from "./tools/taskState.ts";
 import { registerDocTools } from "./tools/doc.ts";
 import { registerChatTools } from "./tools/chat.ts";
 import { registerChannelTools } from "./tools/channel.ts";
-import { registerTopicTools } from "./tools/topic.ts";
 import { registerUserTools } from "./tools/user.ts";
 import { registerSearchTools } from "./tools/search.ts";
 import { registerApprovalsTools } from "./tools/approvals.ts";
@@ -28,7 +27,6 @@ export async function startMcpServer(): Promise<void> {
   registerDocTools(server, client);
   registerChatTools(server, client);
   registerChannelTools(server, client);
-  registerTopicTools(server, client);
   registerUserTools(server, client);
   registerSearchTools(server, client);
   registerApprovalsTools(server, client);

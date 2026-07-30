@@ -3,9 +3,10 @@ import { scopedProcedure, router } from "../trpc.ts";
 import { publishEvent } from "../redis.ts";
 import { runOrQueue } from "../approvalGate.ts";
 
-// DM (recipientId) or channel message (channelId+topicId) — never
-// both. §5.1.3/Phase 4. `projectId` is an optional tag on DMs only
-// (§5.1.2); channel messages get project context from the channel.
+// DM (recipientId) or channel message (channelId) — never both.
+// §5.1.3/Phase 4, single-level channel per ADR-0001. `projectId` is an
+// optional tag on DMs only (§5.1.2); channel messages get project
+// context from the channel.
 const dmInput = z.object({
   recipientId: z.string(),
   content: z.string().min(1),
@@ -13,7 +14,6 @@ const dmInput = z.object({
 });
 const channelInput = z.object({
   channelId: z.string(),
-  topicId: z.string(),
   content: z.string().min(1),
 });
 
@@ -36,7 +36,6 @@ export const chatRouter = router({
                 data: {
                   senderId: ctx.user.id,
                   channelId: input.channelId,
-                  topicId: input.topicId,
                   content: input.content,
                 },
               });
@@ -61,10 +60,10 @@ export const chatRouter = router({
     }),
 
   history: scopedProcedure("chat", "read")
-    .input(z.object({ channelId: z.string(), topicId: z.string() }))
+    .input(z.object({ channelId: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.db.chatMessage.findMany({
-        where: { channelId: input.channelId, topicId: input.topicId },
+        where: { channelId: input.channelId },
         orderBy: { createdAt: "asc" },
       });
     }),

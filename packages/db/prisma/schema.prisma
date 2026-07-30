@@ -29,7 +29,6 @@ model User {
   createdTasks     Task[]
   createdDocs      Doc[]
   createdChannels  Channel[]
-  createdTopics    Topic[]
   sentMessages     ChatMessage[] @relation("ChatMessageSender")
   receivedMessages ChatMessage[] @relation("ChatMessageRecipient")
   ownedApprovalRequests   ApprovalRequest[] @relation("ApprovalRequestOwner")
@@ -258,41 +257,35 @@ model Doc {
 
 // Org-wide or project-scoped (projectId optional, same opt-in pattern
 // as ChatMessage's own project tag below) — CONTEXT.md §5.1.2/Phase 4.
-// No per-channel membership model in v1: every org member can see
-// every channel/topic (§6/§7's "no granular permissions yet" stance).
+// Single-level message container per ADR-0001 (docs/adr/0001-collapse-
+// topic-into-channel.md): this model absorbs what used to be the
+// separate Topic entity — a Channel *is* the thing a message attaches
+// to directly, there's no intermediate grouping level anymore. Must be
+// created explicitly before use (never materializes implicitly from a
+// message send). `isDefault` marks a project's one auto-seeded "project
+// channel" (project.create, mirroring TaskState.isDefault, §5.1.5);
+// any other channel on that project is a manually-created "issue
+// channel" (CONTEXT.md §5.1.10). No per-channel membership model in
+// v1: every org member can see every channel (§6/§7's "no granular
+// permissions yet" stance).
 model Channel {
   id          String   @id @default(cuid())
-  name        String
+  title       String
   projectId   String?
   project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  isDefault   Boolean  @default(false)
   createdById String
   createdBy   User     @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
-  topics      Topic[]
   messages    ChatMessage[]
 
-  @@unique([name])
   @@index([projectId])
   @@map("channel")
 }
 
-model Topic {
-  id          String        @id @default(cuid())
-  channelId   String
-  channel     Channel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  title       String
-  createdById String
-  createdBy   User          @relation(fields: [createdById], references: [id])
-  createdAt   DateTime      @default(now())
-  messages    ChatMessage[]
-
-  @@index([channelId])
-  @@map("topic")
-}
-
 // A message is either a DM (recipientId set) or a channel message
-// (channelId+topicId set) — never both. Enforced in the tRPC router,
-// not the schema (Prisma has no cross-column CHECK constraint DSL).
+// (channelId set) — never both. Enforced in the tRPC router, not the
+// schema (Prisma has no cross-column CHECK constraint DSL).
 model ChatMessage {
   id          String   @id @default(cuid())
   senderId    String
@@ -301,8 +294,6 @@ model ChatMessage {
   recipient   User?    @relation("ChatMessageRecipient", fields: [recipientId], references: [id])
   channelId   String?
   channel     Channel? @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  topicId     String?
-  topic       Topic?   @relation(fields: [topicId], references: [id], onDelete: Cascade)
   projectId   String?
   project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   content     String
@@ -312,7 +303,6 @@ model ChatMessage {
   @@index([recipientId])
   @@index([projectId])
   @@index([channelId])
-  @@index([topicId])
   @@map("chat_message")
 }
 

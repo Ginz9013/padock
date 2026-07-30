@@ -35,6 +35,16 @@ export const projectRouter = router({
             isDefault: s.isDefault ?? false,
           })),
         });
+        // The project's default "project channel" (CONTEXT.md §5.1.10) —
+        // same immediately-usable rationale as the task states above.
+        await ctx.db.channel.create({
+          data: {
+            title: project.name,
+            projectId: project.id,
+            isDefault: true,
+            createdById: ctx.user.id,
+          },
+        });
         return project;
       }),
     ),

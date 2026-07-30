@@ -1,12 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import type { AppRouter } from "@padock/api";
-
-const trpc = createTRPCClient<AppRouter>({
-  links: [httpBatchLink({ url: "/api/trpc" })],
-});
+import { trpc } from "@/lib/trpc";
 
 export default function Home() {
   const [name, setName] = useState("");

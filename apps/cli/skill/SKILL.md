@@ -1,7 +1,7 @@
 ---
 name: padock
 description: Use when the user wants to work with a Padock workspace — find or search project info (docs/tasks/chat), create or update tasks, read or write docs, or message a colleague. Triggers on requests like "find X in project Y", "what's the status of...", "mark this task as done/review", "send this to <colleague>".
-version: 0.6.0
+version: 0.7.0
 ---
 
 # Padock
@@ -33,8 +33,8 @@ itself. If a command fails with `API key lacks '<action>' scope for
 action — ask the user for a broader key rather than retrying. Note
 that name-based lookups (`--project=<name>`, `--channel=<name>`, etc.)
 resolve through that domain's own `list` call, so a scoped key
-practically needs `project:read` (and `channel:read` for topic lookups)
-alongside whatever domain it's meant to touch.
+practically needs `project:read` alongside whatever domain it's meant
+to touch.
 
 ## Commands
 
@@ -49,27 +49,30 @@ alongside whatever domain it's meant to touch.
     padock doc list --project=<name>
     padock doc get <id>
     padock doc update <id> [--title=<title>] (--content=<text> | --file=<path>)
-    padock channel create <name> [--project=<name>]
+    padock channel create <title> [--project=<name>]
     padock channel list [--project=<name>]
-    padock topic create --channel=<name> --title=<title>
-    padock topic list --channel=<name>
     padock chat send --to=<email|name> --message=<text> [--project=<name>]
-    padock chat send --channel=<name> --topic=<title> --message=<text>
+    padock chat send --channel=<name> --message=<text>
     padock chat conversation --with=<email|name>
-    padock chat history --channel=<name> --topic=<title>
+    padock chat history --channel=<name>
     padock chat inbox
     padock user list
     padock search "<query>" [--scope=docs,tasks,chat] [--project=<name>]
     padock approvals list
     padock approvals status <id>
 
-`--project`/`--to`/`--channel`/`--topic` accept a name or email — no need
-to know internal ids. Every command prints JSON.
+`--project`/`--to`/`--channel` accept a name or email — no need to know
+internal ids. Every command prints JSON.
 
-Chat is either a DM (`--to`) or a channel message (`--channel`+`--topic`),
-never both. Channels can be org-wide or scoped to a project; anyone can
-read any channel's messages (there's no per-channel membership model) —
-only DMs are private to the two people in them.
+Chat is either a DM (`--to`) or a channel message (`--channel`), never
+both. Every project gets one auto-created default channel ("project
+channel") on creation, plus whatever extra "issue channels" get created
+with `channel create --project=<name>` for specific discussions — a
+channel must exist before you can send to it, it never materializes
+implicitly from a message send. Channels can also be org-wide (omit
+`--project`); anyone can read any channel's messages (there's no
+per-channel membership model) — only DMs are private to the two people
+in them.
 
 Task states are per-project, not a fixed set — `--status` on `task
 update` takes whatever state names that task's project actually has.
