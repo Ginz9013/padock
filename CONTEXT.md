@@ -130,7 +130,9 @@ Key property: the CLI imports the tRPC client and gets **end-to-end type safety*
 - **Doc**: stored as plain Markdown text, not block-based JSON. `padock doc get <id>` returns Markdown directly — the most LLM/agent-readable format, and the cheapest to build. The long-term AFFiNE-style block model is a storage-layer migration (Markdown → blocks) for later; it does not change the CLI/Skill contract, since agents will keep consuming readable text either way.
 - **Search**: Postgres full-text search (`tsvector`), not semantic/vector search. No embedding model or extra API dependency — consistent with the "no API token required" premise. Padock returns precise keyword/metadata matches; semantic interpretation of results is left to the calling agent's own LLM reasoning, not to Padock's search layer. Revisit only if keyword search proves insufficient in practice.
 
-### 5.1.4 Chat channels/threads (Phase 4, confirmed)
+### 5.1.4 Chat channels/threads (Phase 4, shipped; superseded by §5.1.10)
+
+> **Superseded (Phase 8 web UI, planned):** the two-level `Channel`→`Topic` structure described below is being collapsed into a single `Channel` level — see [ADR-0001](docs/adr/0001-collapse-topic-into-channel.md) and §5.1.10. This section is kept as the historical record of what Phase 4 actually shipped.
 
 Zulip's stream+topic model (§5.1's reference), not Slack's channel+reply-thread model: a `Channel` contains named `Topic`s, and every message belongs to exactly one topic. A `ChatMessage` is now either a DM (`recipientId` set) or a channel message (`channelId`+`topicId` set) — never both.
 
@@ -173,6 +175,29 @@ Phase 7 built the first real (non-debug) web UI, replacing the Phase 0 debug hom
 - **Route protection lives in `proxy.ts`, not page rendering mode** — confirms the §6 "Rendering model" decision. `apps/web/proxy.ts` checks only whether a session cookie is present (`getSessionCookie`, no DB hit) and redirects: signed-in users away from `/`, `/login`, `/register` toward `/dashboard`; signed-out users away from `/dashboard`, `/approvals` toward `/login`. This is a UX redirect only — real authorization still happens server-side per tRPC call (`resolveIdentity`), unchanged since Phase 0.
 - **Authenticated app shell** — `(app)/layout.tsx` adds a persistent header (nav links to Dashboard/Approvals, signed-in user's email, sign-out) wrapping both pages. `/approvals` (Phase 6b) now lives inside this shell instead of standing alone.
 - **`/dashboard` is a placeholder, not a real page** — it renders a welcome message and the literal text "Chat, tasks, and docs will live here." No chat/task/doc web UI exists yet; those three domains remain **CLI/MCP-only** (see §7).
+
+### 5.1.9 Chat display boundaries in the web UI (Phase 8 web UI, planned)
+
+`ChatMessage.projectId` is a per-message tag, not a per-conversation attribute — a single DM thread can freely mix tagged and untagged messages, and the existing `chat.conversation` query already returns a counterpart's full history unfiltered by `projectId` (verified against `packages/api/src/router/chat.ts`). The web UI does not attempt to partition DM threads by project on this basis: **DMs always render as one continuous, unfiltered thread** wherever DMs are shown, regardless of any project tag on individual messages within them.
+
+Only `Channel.projectId` is a clean, stable boundary — fixed once at channel creation (§5.1.4), inherited by every message in it — so it's what the UI actually uses to decide *where a channel's messages appear*: the dashboard's non-project chat surface vs. a project's own chat panel. A project-tagged DM message stays discoverable via `--project=X` search (§5.1.2); it just isn't pulled into a project's live chat panel or excluded from the dashboard on that basis.
+
+The dashboard's chat surface itself shows **both** DMs and org-wide channels (not DMs alone) — org-wide `Channel`s (§5.1.4/§5.1.10) aren't being retired, just not the dashboard's only content.
+
+### 5.1.10 Single-level `Channel` per project: "project channel" + "issue channels" (Phase 8 web UI, planned)
+
+Per [ADR-0001](docs/adr/0001-collapse-topic-into-channel.md), the web UI's chat model is one flat level, not Zulip's channel-contains-topics structure (§5.1.4): a `Project` has exactly one auto-created, default **project channel** (`Channel.isDefault`, seeded at `project.create` time the same way `TaskState`'s six defaults are, §5.1.5) plus any number of manually-created **issue channels** for specific discussions — never a channel nested inside another channel. `Channel` remains optionally scoped to a `Project` via `projectId` (`null` = org-wide, unchanged from §5.1.4); within a project, `isDefault` distinguishes the one project channel from its issue channels.
+
+- **`Channel` and `Task` are deliberately not linked.** An issue channel's "issue" is a loosely-scoped discussion topic, not a foreign key to a specific `Task` row — a channel can outlive, precede, or span multiple tasks. Revisit only if a real workflow needs one-click "jump from this task to its discussion".
+- **Manual creation only, already true today.** A channel (message container) must be explicitly created before it can be referenced by a message — Padock never adopted Zulip's implicit-topic-materializes-on-send behavior in the first place (verified against `packages/api/src/router/topic.ts`), so this requirement carries forward into the merged model with no new enforcement needed.
+- **The project's chat panel needs a lightweight channel switcher**, not a single fixed feed — it defaults to showing the project channel, with the project's other issue channels reachable from the same panel. This is a step up in scope from a channel-free single feed, a direct consequence of allowing multiple issue channels per project.
+
+### 5.1.11 Docs tab: flat list now, nesting is a named future direction (Phase 8 web UI, planned)
+
+The project workspace's Docs tab (§5.1's UX shell) opens on a **flat list** of the project's `Doc`s (Plane's Pages tab is the immediate reference) — matching `Doc`'s current schema exactly (`projectId/title/blocks/searchText`, no `parentId`), zero migration needed to ship this.
+
+- **Long-term direction, explicitly not Phase 8 scope: Notion-level docs.** The maintainer's stated north star for the Doc module is closer to Notion than to Plane — starting with arbitrarily nested pages (a `Doc.parentId` self-relation, turning the flat list into a tree), which Plane's own Pages already has and Padock doesn't yet. This is named here so it isn't lost, not because Phase 8 is building it.
+- **"Notion-level" means richer editing + hierarchy, not real-time multiplayer.** §6/§10 already exclude CRDT/multi-cursor collaborative editing from v1 non-goals; that exclusion stands. Nested pages are an orthogonal, separate feature from live co-editing and don't require revisiting that non-goal.
 
 ### 5.2 Padock CLI
 
