@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "@padock/api";
 
+import { Button } from "@/components/ui/button";
+
 const trpc = createTRPCClient<AppRouter>({
   links: [httpBatchLink({ url: "/api/trpc" })],
 });
@@ -41,6 +43,10 @@ export default function ApprovalsPage() {
   }
 
   useEffect(() => {
+    // Standard fetch-on-mount: refresh()'s setState calls happen after its
+    // internal `await`, not synchronously in this effect body — safe, but
+    // the lint rule can't see through the indirection to confirm that.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, []);
 
@@ -61,48 +67,51 @@ export default function ApprovalsPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6 p-8 font-sans">
-      <h1 className="text-2xl font-semibold">Padock — Approval queue</h1>
-      <p className="text-sm text-zinc-500">
-        Writes submitted by unattended (scheduled/cron) API keys wait here until a
-        signed-in user approves or rejects them.
-      </p>
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="font-heading text-2xl font-semibold">Approval queue</h1>
+        <p className="text-sm text-muted-foreground">
+          Writes submitted by unattended (scheduled/cron) API keys wait here until a
+          signed-in user approves or rejects them.
+        </p>
+      </div>
 
-      <button className="w-fit rounded border px-3 py-1" onClick={refresh}>
+      <Button variant="outline" size="sm" className="w-fit" onClick={refresh}>
         Refresh
-      </button>
+      </Button>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       {pending.length === 0 ? (
-        <p className="text-sm text-zinc-500">No pending requests.</p>
+        <p className="text-sm text-muted-foreground">No pending requests.</p>
       ) : (
         <ul className="flex flex-col gap-3">
           {pending.map((request) => (
-            <li key={request.id} className="rounded border p-3">
+            <li key={request.id} className="rounded-lg border p-3">
               <p className="font-mono text-sm">{request.path}</p>
-              <pre className="mt-1 max-h-40 overflow-auto rounded bg-zinc-100 p-2 text-xs dark:bg-zinc-900">
+              <pre className="mt-1 max-h-40 overflow-auto rounded bg-muted p-2 text-xs">
                 {JSON.stringify(request.input, null, 2)}
               </pre>
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 submitted by user {request.userId} at{" "}
                 {new Date(request.createdAt).toLocaleString()}
               </p>
               <div className="mt-2 flex gap-2">
-                <button
-                  className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-50"
+                <Button
+                  size="sm"
                   disabled={busyId === request.id}
                   onClick={() => decide(request.id, "approve")}
                 >
                   Approve
-                </button>
-                <button
-                  className="rounded border px-3 py-1 text-sm disabled:opacity-50"
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={busyId === request.id}
                   onClick={() => decide(request.id, "reject")}
                 >
                   Reject
-                </button>
+                </Button>
               </div>
             </li>
           ))}
