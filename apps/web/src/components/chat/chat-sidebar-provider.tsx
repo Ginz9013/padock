@@ -107,7 +107,14 @@ export function ChatSidebarProvider({ children }: { children: ReactNode }) {
         const message = event.message as IncomingChatMessage;
 
         if (message.channelId) {
-          noteLatest(`channel:${message.channelId}`, message.createdAt);
+          const key = `channel:${message.channelId}`;
+          // Noted regardless of direction — the Recent list needs to
+          // reflect a channel message you just *sent*, not only ones
+          // you received. But if you're the sender, immediately mark
+          // it read too, so posting your own message doesn't light up
+          // its own unread badge.
+          noteLatest(key, message.createdAt);
+          if (message.senderId === meId) markRead(key);
           return;
         }
         if (!meId || !message.recipientId) return;
@@ -116,7 +123,11 @@ export function ChatSidebarProvider({ children }: { children: ReactNode }) {
         // Noted regardless of direction — the Recent list needs to
         // reflect a DM you just *sent*, not only ones you received.
         noteLatest(key, message.createdAt);
-        if (message.senderId !== meId) {
+        if (message.senderId === meId) {
+          // Sending your own message shouldn't flag the conversation
+          // unread for yourself.
+          markRead(key);
+        } else {
           setConversations((prev) =>
             prev.some((c) => c.key === key)
               ? prev
@@ -127,7 +138,7 @@ export function ChatSidebarProvider({ children }: { children: ReactNode }) {
           );
         }
       },
-      [meId, noteLatest, profiles],
+      [meId, noteLatest, markRead, profiles],
     ),
   );
 
