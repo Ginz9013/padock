@@ -2,32 +2,29 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Hash, MessageCircle } from "lucide-react";
 
 import { useSession } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
 import { useChatSidebar } from "@/components/chat/chat-sidebar-provider";
-import { cn } from "@/lib/utils";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChatThread } from "@/components/chat/chat-thread";
 
 type Project = { id: string; name: string };
 
 // Dashboard = the cross-project communication surface (this session's
-// UX decision): a merged feed of DMs + org-wide channels — project-
-// scoped channels live in their own project's chat panel instead
-// (CONTEXT.md §5.1.9/§5.1.10) — plus a compact overview of projects,
-// which get their own persistent nav entry in the sidebar too.
+// UX decision) — project-scoped channels live in their own project's
+// chat panel instead (CONTEXT.md §5.1.9/§5.1.10) — plus a compact
+// overview of projects, which get their own persistent nav entry in
+// the sidebar too.
 //
-// The People list used to live here too; it's now the persistent
-// right sidebar (org-wide, every page — @/components/chat/chat-
-// sidebar-provider) since finding someone to DM shouldn't require
-// being on this specific page. This content area keeps only what's
-// Dashboard-specific: the Conversations list and the actual thread.
+// The People list (and the Conversations list that used to sit next
+// to the thread here) both moved to the persistent right sidebar
+// (org-wide, every page — @/components/chat/chat-sidebar-provider):
+// it's now the *only* place to pick who to talk to. This content area
+// is just the thread itself for whoever's selected there.
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const { conversations, selected, profiles, isUnread, markRead, selectConversation } =
-    useChatSidebar();
+  const { selected, profiles, markRead } = useChatSidebar();
   const [projects, setProjects] = useState<Project[]>([]);
 
   useEffect(() => {
@@ -65,49 +62,22 @@ export default function DashboardPage() {
 
       <section className="flex min-h-0 flex-1 flex-col">
         <h2 className="mb-2 text-sm font-medium text-muted-foreground">Messages</h2>
-        <div className="flex min-h-0 flex-1 overflow-hidden rounded-lg border">
-          <div className="flex w-56 shrink-0 flex-col overflow-y-auto border-r">
-            {conversations.length === 0 && (
-              <p className="p-3 text-sm text-muted-foreground">Nothing here yet.</p>
-            )}
-            {conversations.map((c) => (
-              <button
-                key={c.key}
-                onClick={() => selectConversation(c)}
-                className={cn(
-                  "flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted",
-                  selected?.key === c.key && "bg-muted font-medium",
-                )}
-              >
-                {c.kind === "dm" ? (
-                  <MessageCircle className="size-3.5 shrink-0 text-muted-foreground" />
-                ) : (
-                  <Hash className="size-3.5 shrink-0 text-muted-foreground" />
-                )}
-                <span className="min-w-0 flex-1 truncate">{c.label}</span>
-                {isUnread(c.key) && (
-                  <span className="size-2 shrink-0 rounded-full bg-red-500" aria-label="Unread" />
-                )}
-              </button>
-            ))}
-          </div>
-          <div className="min-w-0 flex-1">
-            {selected ? (
-              <ChatThread
-                target={
-                  selected.kind === "dm"
-                    ? { kind: "dm", withUserId: selected.withUserId }
-                    : { kind: "channel", channelId: selected.channelId }
-                }
-                profiles={profiles}
-                onFocusInput={() => markRead(selected.key)}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Select a conversation
-              </div>
-            )}
-          </div>
+        <div className="min-h-0 flex-1 overflow-hidden rounded-lg border">
+          {selected ? (
+            <ChatThread
+              target={
+                selected.kind === "dm"
+                  ? { kind: "dm", withUserId: selected.withUserId }
+                  : { kind: "channel", channelId: selected.channelId }
+              }
+              profiles={profiles}
+              onFocusInput={() => markRead(selected.key)}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Pick someone from the People sidebar to start a conversation
+            </div>
+          )}
         </div>
       </section>
     </div>
