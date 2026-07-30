@@ -21,13 +21,15 @@ import {
 
 type Project = { id: string; name: string };
 
-// Persistent global nav (CONTEXT.md §5's UX shell): Dashboard, Chat, a
-// project list, and Approvals. Shaped after ChatRightSidebar (this
-// session's UX decision): resizable-by-drag and collapsible via a
-// toggle button in its own top bar rather than the app header, with
-// projects a user pins staying fixed in a "Pinned" section above the
-// full list instead of a recency-based "Recent" section — there's no
-// message-timestamp signal to sort projects by the way DMs have.
+// Persistent project nav (CONTEXT.md §5's UX shell): a project list
+// and Approvals. Shaped after ChatRightSidebar (this session's UX
+// decision): resizable-by-drag and collapsible via a toggle button in
+// its own top bar rather than the app header, with projects a user
+// pins staying fixed in a "Pinned" section above the full list
+// instead of a recency-based "Recent" section — there's no
+// message-timestamp signal to sort projects by the way DMs have. The
+// "Padock" brand link lives in the app header instead (this session's
+// UX decision) since the sidebar is project-scoped, not a brand home.
 export function AppSidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -50,25 +52,13 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-      <div className="flex items-center gap-1.5 border-b px-3 py-2">
+      <div className="flex items-center justify-end border-b px-3 py-2">
         {onClose && (
           <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Collapse sidebar">
             <PanelLeftClose className="size-4" />
           </Button>
         )}
-        <Link href="/dashboard" className="font-heading text-sm font-semibold">
-          Padock
-        </Link>
       </div>
-
-      <nav className="flex flex-col gap-0.5 px-2 py-2">
-        <SidebarLink href="/dashboard" active={pathname === "/dashboard"}>
-          Dashboard
-        </SidebarLink>
-        <SidebarLink href="/chat" active={pathname.startsWith("/chat")}>
-          Chat
-        </SidebarLink>
-      </nav>
 
       <div className="flex-1 overflow-y-auto px-1.5 pb-2">
         {pinned.length > 0 && (

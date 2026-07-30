@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
@@ -65,13 +66,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <ChatSidebarProvider>
       <div className="flex h-screen flex-col overflow-hidden">
-        <header className="flex w-full shrink-0 items-center justify-end gap-3 border-b px-6 py-3">
-          {session?.user && (
-            <span className="text-sm text-muted-foreground">{session.user.email}</span>
-          )}
-          <Button variant="outline" size="sm" onClick={handleSignOut}>
-            Sign out
-          </Button>
+        <header className="flex w-full shrink-0 items-center justify-between gap-3 border-b px-6 py-3">
+          <Link href="/dashboard" className="font-heading text-sm font-semibold">
+            Padock
+          </Link>
+          <div className="flex items-center gap-3">
+            {session?.user && (
+              <span className="text-sm text-muted-foreground">{session.user.email}</span>
+            )}
+            <Button variant="outline" size="sm" onClick={handleSignOut}>
+              Sign out
+            </Button>
+          </div>
         </header>
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           <ResizablePanelGroup orientation="horizontal" className="min-w-0 flex-1">
