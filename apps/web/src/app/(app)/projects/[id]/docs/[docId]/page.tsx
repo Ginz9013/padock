@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import MarkdownEditorView, { type MarkdownEditorApi } from "@/components/markdown-editor-view-lazy";
-import { AutosaveStatus, type AutosaveState } from "@/components/autosave-status";
+import { AutosaveIndicator, AutosaveStatus, type AutosaveState } from "@/components/autosave-status";
 import { DocAttributePanel, type DocAttributeValueRow } from "../../doc-attribute-panel";
 
 type Doc = { id: string; title: string; content: string; updatedAt: string; attributeValues: DocAttributeValueRow[] };
@@ -122,7 +122,7 @@ export default function DocDetailPage() {
 
   return (
     <div className="flex flex-col gap-3 px-6">
-      <div className="flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between">
         <Link
           href={`/projects/${projectId}/docs`}
           className="flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
@@ -130,16 +130,19 @@ export default function DocDetailPage() {
           <ArrowLeft className="size-3" />
           Docs
         </Link>
-        <ConfirmDialog
-          trigger={
-            <Button size="icon" variant="ghost" className="size-6" aria-label="Delete doc">
-              <Trash2 className="size-3.5" />
-            </Button>
-          }
-          title={`Delete "${title || doc.title}"?`}
-          description="This can't be undone."
-          onConfirm={removeDoc}
-        />
+        <div className="flex items-center gap-3">
+          <AutosaveIndicator status={status} />
+          <ConfirmDialog
+            trigger={
+              <Button size="icon" variant="ghost" className="size-6" aria-label="Delete doc">
+                <Trash2 className="size-3.5" />
+              </Button>
+            }
+            title={`Delete "${title || doc.title}"?`}
+            description="This can't be undone."
+            onConfirm={removeDoc}
+          />
+        </div>
       </div>
 
       <AutosaveStatus status={status} onReloadLatest={() => void reloadLatest()} onForceSave={() => void save(true)} />

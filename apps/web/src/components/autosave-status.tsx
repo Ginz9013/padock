@@ -2,6 +2,21 @@ import { Button } from "@/components/ui/button";
 
 export type AutosaveState = "idle" | "saving" | "saved" | "conflict" | "deleted";
 
+// Small inline light for the common-path states — lives next to the
+// title/controls. Lights up green with a ripple only while a save is
+// in flight, and disappears entirely once it succeeds; failure states
+// (conflict/deleted) are surfaced separately by AutosaveStatus below
+// since they need explanatory text and action buttons, not a dot.
+export function AutosaveIndicator({ status }: { status: AutosaveState }) {
+  if (status !== "saving") return null;
+  return (
+    <span className="relative flex size-2" title="Saving…">
+      <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+      <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+    </span>
+  );
+}
+
 // Shared by every entity using the debounce-autosave + optimistic-lock
 // pattern (CONTEXT.md §5.1.16 — Doc, and now Task's description). On
 // conflict, neither side's edits are ever discarded without the user
@@ -40,10 +55,5 @@ export function AutosaveStatus({
       </div>
     );
   }
-  return (
-    <div className="text-xs text-muted-foreground">
-      {status === "saving" && "Saving…"}
-      {status === "saved" && "Saved"}
-    </div>
-  );
+  return null;
 }

@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import MarkdownEditorView, { type MarkdownEditorApi } from "@/components/markdown-editor-view-lazy";
-import { AutosaveStatus, type AutosaveState } from "@/components/autosave-status";
+import { AutosaveIndicator, AutosaveStatus, type AutosaveState } from "@/components/autosave-status";
 import { PRIORITIES } from "./task-types";
 import type { ProjectLabel, ProjectMemberSummary, Task, TaskPriority, TaskState } from "./task-types";
 import { LabelBadge } from "./label-badge";
@@ -171,14 +171,17 @@ function TaskDetailForm({
     <>
       <SheetHeader>
         <SheetTitle className="sr-only">{task.title || "Task details"}</SheetTitle>
-        <Input
-          value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            scheduleSave();
-          }}
-          className="border-none px-0 text-base font-semibold shadow-none focus-visible:ring-0"
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              scheduleSave();
+            }}
+            className="border-none px-0 text-base font-semibold shadow-none focus-visible:ring-0"
+          />
+          <AutosaveIndicator status={status} />
+        </div>
       </SheetHeader>
 
       <div className="flex flex-col gap-4 px-4 pb-4">
