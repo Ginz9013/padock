@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { CalendarIcon, X } from "lucide-react";
 
 import { trpc, unwrapWrite } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -27,6 +29,23 @@ export type DocAttributeValueRow = {
 };
 
 type CellValue = string | number | boolean | null;
+
+// `valueDate` is date-only (CONTEXT.md §5.1.18), stored/transmitted as a
+// "YYYY-MM-DD" string. Calendar hands back a local-midnight Date on
+// select — converting through toISOString()/`new Date(isoString)` would
+// shift by the viewer's UTC offset, so these read/write the date's local
+// y/m/d components directly instead of going through UTC at any point.
+function parseDateOnly(value: string): Date {
+  const [y, m, d] = value.slice(0, 10).split("-").map(Number);
+  return new Date(y!, m! - 1, d!);
+}
+
+function formatDateOnly(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 function extractValue(type: DocAttributeType, row: DocAttributeValueRow | undefined): CellValue {
   if (!row) return null;
@@ -126,15 +145,34 @@ function AttributeControl({
           className="h-7"
         />
       );
-    case "date":
+    case "date": {
+      const dateValue = value as string | null;
+      const selected = dateValue ? parseDateOnly(dateValue) : undefined;
       return (
-        <Input
-          type="date"
-          value={(value as string | null)?.slice(0, 10) ?? ""}
-          onChange={(e) => onSave(e.target.value === "" ? null : e.target.value)}
-          className="h-7"
-        />
+        <div className="flex items-center gap-1">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 w-40 justify-start font-normal">
+                <CalendarIcon className="size-3.5 text-muted-foreground" />
+                {selected ? selected.toLocaleDateString() : <span className="text-muted-foreground">—</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={selected}
+                onSelect={(date) => onSave(date ? formatDateOnly(date) : null)}
+              />
+            </PopoverContent>
+          </Popover>
+          {selected && (
+            <Button size="icon-sm" variant="ghost" onClick={() => onSave(null)} aria-label="Clear">
+              <X className="size-3.5" />
+            </Button>
+          )}
+        </div>
       );
+    }
     case "checkbox":
       return (
         <Checkbox checked={value === true} onCheckedChange={(checked) => onSave(checked === true)} />
