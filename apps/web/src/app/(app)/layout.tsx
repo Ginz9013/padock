@@ -115,7 +115,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
         </header>
-        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           <ResizablePanelGroup orientation="horizontal" className="min-w-0 flex-1">
             <ResizablePanel
               panelRef={leftPanelRef}
@@ -131,13 +131,37 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize="60" minSize="30">
               <div className="flex h-full flex-col">
-                {projectName && (
-                  <div className="shrink-0 border-b px-6 py-2">
-                    {/* h-7/leading-7 matches the sidebars' own border-b
-                        px-3 py-2 header rows, whose height comes from a
-                        size-7 (28px) collapse button — same total row
-                        height (28px content + 8px top/bottom padding). */}
-                    <h2 className="h-7 truncate text-sm leading-7 font-medium">{projectName}</h2>
+                {/* Reopen buttons for both collapsed side panels live here
+                    now, not as floating absolute buttons over the content
+                    — one shared row instead of two independently
+                    positioned overlays. leading-7/size-7 matches the
+                    sidebars' own border-b px-3 py-2 header rows, whose
+                    height comes from their size-7 collapse button. */}
+                {(projectName || leftCollapsed || chatCollapsed) && (
+                  <div className="flex shrink-0 items-center gap-2 border-b px-6 py-2">
+                    {leftCollapsed && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={toggleLeftSidebar}
+                        aria-label="Open project sidebar"
+                        className="shrink-0"
+                      >
+                        <PanelLeftOpen className="size-4" />
+                      </Button>
+                    )}
+                    <h2 className="min-w-0 flex-1 truncate text-sm leading-7 font-medium">{projectName}</h2>
+                    {chatCollapsed && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={toggleChatSidebar}
+                        aria-label="Open chat sidebar"
+                        className="shrink-0"
+                      >
+                        <PanelRightOpen className="size-4" />
+                      </Button>
+                    )}
                   </div>
                 )}
                 <main className="min-h-0 flex-1 overflow-y-auto px-6 py-8">{children}</main>
@@ -156,28 +180,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <ChatRightSidebar onClose={toggleChatSidebar} />
             </ResizablePanel>
           </ResizablePanelGroup>
-          {leftCollapsed && (
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={toggleLeftSidebar}
-              aria-label="Open project sidebar"
-              className="absolute top-3 left-3 z-10 shadow-sm"
-            >
-              <PanelLeftOpen className="size-4" />
-            </Button>
-          )}
-          {chatCollapsed && (
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={toggleChatSidebar}
-              aria-label="Open chat sidebar"
-              className="absolute top-3 right-3 z-10 shadow-sm"
-            >
-              <PanelRightOpen className="size-4" />
-            </Button>
-          )}
         </div>
       </div>
     </ChatSidebarProvider>
