@@ -19,6 +19,7 @@ import {
 import { LABEL_COLORS } from "../task-types";
 import type { ProjectLabel } from "../task-types";
 import { LabelBadge } from "../label-badge";
+import { DocAttributesSettings } from "../doc-attributes-settings";
 import { cn } from "@/lib/utils";
 
 type Project = { id: string; name: string; createdAt: string };
@@ -155,6 +156,8 @@ export default function ProjectOverviewPage() {
           </div>
         )}
       </div>
+
+      <DocAttributesSettings projectId={projectId} />
 
       {/* Membership management stays last — the most consequential
           section (admin/remove) belongs at the bottom, below lighter-

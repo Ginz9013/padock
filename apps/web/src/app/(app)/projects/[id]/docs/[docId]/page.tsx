@@ -12,8 +12,9 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import MarkdownEditorView, { type MarkdownEditorApi } from "@/components/markdown-editor-view-lazy";
 import { AutosaveStatus, type AutosaveState } from "@/components/autosave-status";
+import { DocAttributePanel, type DocAttributeValueRow } from "../../doc-attribute-panel";
 
-type Doc = { id: string; title: string; content: string; updatedAt: string };
+type Doc = { id: string; title: string; content: string; updatedAt: string; attributeValues: DocAttributeValueRow[] };
 
 const AUTOSAVE_DELAY_MS = 1500;
 
@@ -152,6 +153,10 @@ export default function DocDetailPage() {
         placeholder="Untitled"
         className="h-auto border-none bg-transparent py-0 pl-6 pr-0 font-heading text-4xl font-semibold focus-visible:ring-0 md:text-4xl"
       />
+
+      <DocAttributePanel key={docId} projectId={projectId} docId={docId} initialValues={doc.attributeValues} />
+
+      <hr className="my-2 border-border" />
 
       <MarkdownEditorView
         initialContent={doc.content}
