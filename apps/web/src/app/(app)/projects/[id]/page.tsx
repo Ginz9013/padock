@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -24,25 +25,53 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { TaskBoard } from "./task-board";
+import { TaskTable } from "./task-table";
+import { TaskCalendar } from "./task-calendar";
+import { TaskTimeline } from "./task-timeline";
+import { TaskDetailModal } from "./task-detail-modal";
+import { LabelBadge } from "./label-badge";
+import type { ProjectLabel, ProjectMemberSummary, Task, TaskPriority, TaskState } from "./task-types";
 
-type TaskState = { id: string; name: string; group: string; position: number; isDefault: boolean };
-type Task = { id: string; title: string; description: string | null; stateId: string };
+const VIEWS = [
+  { key: "list", label: "List" },
+  { key: "board", label: "Board" },
+  { key: "table", label: "Table" },
+  { key: "calendar", label: "Calendar" },
+  { key: "timeline", label: "Timeline" },
+] as const;
+type View = (typeof VIEWS)[number]["key"];
+const VIEW_KEYS: readonly string[] = VIEWS.map((v) => v.key);
 
-// The project workspace's default view (Plane's work-item list is the
+// The project workspace's task view (Plane's work-item list/board are the
 // reference, CONTEXT.md §5's UX shell) — grouped by that project's own
-// configurable states (§5.1.5), not a global status enum.
+// configurable states (§5.1.5), not a global status enum. The active
+// layout is a `?view=` query param, not a separate route — it's a display
+// mode over the same task data, not a distinct content section (unlike
+// Tasks/Modules/Docs/Channels themselves, which are real routes).
 export default function ProjectTaskPage() {
   const { id: projectId } = useParams<{ id: string }>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const viewParam = searchParams.get("view");
+  const view: View = (VIEW_KEYS.includes(viewParam ?? "") ? viewParam : "list") as View;
   const [states, setStates] = useState<TaskState[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [members, setMembers] = useState<ProjectMemberSummary[]>([]);
+  const [labels, setLabels] = useState<ProjectLabel[]>([]);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
 
   async function refresh() {
-    const [stateList, taskList] = await Promise.all([
+    const [stateList, taskList, memberList, labelList] = await Promise.all([
       trpc.taskState.list.query({ projectId }),
       trpc.task.list.query({ projectId }),
+      trpc.project.listMembers.query({ projectId }),
+      trpc.label.list.query({ projectId }),
     ]);
     setStates([...stateList].sort((a, b) => a.position - b.position));
     setTasks(taskList);
+    setMembers(memberList);
+    setLabels(labelList);
   }
 
   useEffect(() => {
@@ -55,59 +84,154 @@ export default function ProjectTaskPage() {
     await refresh();
   }
 
+  async function changePriority(taskId: string, priority: TaskPriority) {
+    await trpc.task.updatePriority.mutate({ id: taskId, priority });
+    await refresh();
+  }
+
+  async function changeDate(taskId: string, field: "startDate" | "endDate", dateKey: string) {
+    await trpc.task.updateDates.mutate({ id: taskId, [field]: dateKey });
+    await refresh();
+  }
+
+  function setView(next: View) {
+    const params = new URLSearchParams(searchParams);
+    params.set("view", next);
+    router.replace(`?${params.toString()}`);
+  }
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-muted-foreground">Tasks</h2>
+    <div className="flex h-full min-h-0 flex-col gap-6">
+      <div className="flex shrink-0 items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h2 className="text-sm font-medium text-muted-foreground">Tasks</h2>
+          <ViewSwitcher view={view} onChange={setView} />
+        </div>
         <NewTaskDialog projectId={projectId} onCreated={refresh} />
       </div>
 
-      <div className="flex flex-col gap-6">
-        {states.map((state) => {
-          const stateTasks = tasks.filter((t) => t.stateId === state.id);
-          return (
-            <div key={state.id}>
-              <div className="mb-2 flex items-center gap-2">
-                <h3 className="text-sm font-medium">{state.name}</h3>
-                <Badge variant="secondary">{stateTasks.length}</Badge>
-              </div>
-              {stateTasks.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No tasks.</p>
-              ) : (
-                <ul className="flex flex-col gap-1.5">
-                  {stateTasks.map((task) => (
-                    <li
-                      key={task.id}
-                      className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm">{task.title}</p>
-                        {task.description && (
-                          <p className="truncate text-xs text-muted-foreground">
-                            {task.description}
-                          </p>
-                        )}
-                      </div>
-                      <Select value={task.stateId} onValueChange={(v) => changeState(task.id, v)}>
-                        <SelectTrigger size="sm" className="w-36 shrink-0">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {states.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          );
-        })}
+      <div className="min-h-0 flex-1">
+        {view === "board" && (
+          <TaskBoard states={states} tasks={tasks} onMove={changeState} onOpenTask={setOpenTaskId} />
+        )}
+        {view === "table" && (
+          <TaskTable
+            states={states}
+            tasks={tasks}
+            onChangeState={changeState}
+            onChangePriority={changePriority}
+            onOpenTask={setOpenTaskId}
+          />
+        )}
+        {view === "calendar" && (
+          <TaskCalendar tasks={tasks} onChangeDate={changeDate} onOpenTask={setOpenTaskId} />
+        )}
+        {view === "timeline" && <TaskTimeline tasks={tasks} onOpenTask={setOpenTaskId} />}
+        {view === "list" && (
+          <TaskListView states={states} tasks={tasks} onChangeState={changeState} onOpenTask={setOpenTaskId} />
+        )}
       </div>
+
+      <TaskDetailModal
+        task={tasks.find((t) => t.id === openTaskId) ?? null}
+        states={states}
+        members={members}
+        labels={labels}
+        onClose={() => setOpenTaskId(null)}
+        onChanged={refresh}
+      />
+    </div>
+  );
+}
+
+function ViewSwitcher({ view, onChange }: { view: View; onChange: (v: View) => void }) {
+  return (
+    <div className="flex items-center gap-1 rounded-md bg-muted p-1">
+      {VIEWS.map((v) => (
+        <button
+          key={v.key}
+          type="button"
+          onClick={() => onChange(v.key)}
+          className={cn(
+            "rounded-sm px-2 py-0.5 text-xs font-medium transition-colors",
+            view === v.key ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {v.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TaskListView({
+  states,
+  tasks,
+  onChangeState,
+  onOpenTask,
+}: {
+  states: TaskState[];
+  tasks: Task[];
+  onChangeState: (taskId: string, stateId: string) => Promise<void>;
+  onOpenTask: (taskId: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      {states.map((state) => {
+        const stateTasks = tasks.filter((t) => t.stateId === state.id);
+        return (
+          <div key={state.id}>
+            <div className="mb-2 flex items-center gap-2">
+              <h3 className="text-sm font-medium">{state.name}</h3>
+              <Badge variant="secondary">{stateTasks.length}</Badge>
+            </div>
+            {stateTasks.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No tasks.</p>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {stateTasks.map((task) => (
+                  <li
+                    key={task.id}
+                    className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onOpenTask(task.id)}
+                      className="min-w-0 flex-1 cursor-pointer text-left"
+                    >
+                      <p className="truncate text-sm">{task.title}</p>
+                      {task.description && (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {task.description}
+                        </p>
+                      )}
+                      {task.labels.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {task.labels.map((l) => (
+                            <LabelBadge key={l.id} label={l.label} />
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                    <Select value={task.stateId} onValueChange={(v) => onChangeState(task.id, v)}>
+                      <SelectTrigger size="sm" className="w-36 shrink-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {states.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

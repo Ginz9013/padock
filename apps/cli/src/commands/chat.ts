@@ -10,7 +10,10 @@ export function registerChatCommands(program: Command): void {
     .option("--to <emailOrNameOrId>", "DM recipient — mutually exclusive with --channel")
     .option("--channel <nameOrId>", "channel to post to")
     .requiredOption("--message <text>")
-    .option("--project <nameOrId>", "DM only — tag the message with a project")
+    .option(
+      "--project <nameOrId>",
+      "with --to: tag the DM with a project. With --channel: scope the channel name lookup (required to resolve a project-scoped channel by name, must also already be a member of it)",
+    )
     .action(async (opts: { to?: string; channel?: string; message: string; project?: string }) => {
       const client = createClient();
       await run(() => sendMessage(client, opts));
@@ -27,7 +30,8 @@ export function registerChatCommands(program: Command): void {
   chat
     .command("history")
     .requiredOption("--channel <nameOrId>")
-    .action(async (opts: { channel: string }) => {
+    .option("--project <nameOrId>", "scope the channel name lookup to a project's channels")
+    .action(async (opts: { channel: string; project?: string }) => {
       const client = createClient();
       await run(() => getChatHistory(client, opts));
     });

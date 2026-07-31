@@ -11,6 +11,7 @@ import { registerSearchCommand } from "./commands/search.ts";
 import { registerInitSkillCommand } from "./commands/init-skill.ts";
 import { registerChannelCommands } from "./commands/channel.ts";
 import { registerTaskStateCommands } from "./commands/task-state.ts";
+import { registerLabelCommands } from "./commands/label.ts";
 import { registerMcpCommand } from "./commands/mcp.ts";
 import { registerApprovalsCommands } from "./commands/approvals.ts";
 
@@ -29,6 +30,7 @@ registerSearchCommand(program);
 registerInitSkillCommand(program);
 registerChannelCommands(program);
 registerTaskStateCommands(program);
+registerLabelCommands(program);
 registerMcpCommand(program);
 registerApprovalsCommands(program);
 

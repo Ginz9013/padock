@@ -33,6 +33,8 @@ model User {
   receivedMessages ChatMessage[] @relation("ChatMessageRecipient")
   ownedApprovalRequests   ApprovalRequest[] @relation("ApprovalRequestOwner")
   decidedApprovalRequests ApprovalRequest[] @relation("ApprovalRequestDecider")
+  createdProjects    Project[]
+  projectMemberships ProjectMember[]
 
   @@unique([email])
   @@map("user")
@@ -167,20 +169,51 @@ model Apikey {
 // Cross-domain anchor per CONTEXT.md §5.1.2: tasks and docs (Phase 1)
 // will require a projectId; chat messages will tag it optionally.
 model Project {
-  id             String       @id @default(cuid())
+  id             String          @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name           String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdById    String?
+  createdBy      User?           @relation(fields: [createdById], references: [id])
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  members        ProjectMember[]
   tasks          Task[]
   taskStates     TaskState[]
+  labels         Label[]
   docs           Doc[]
   chatMessages   ChatMessage[]
   channels       Channel[]
 
   @@index([organizationId])
   @@map("project")
+}
+
+// Access control layer for Projects: only a project's ProjectMembers can
+// see or act on it (enforced in the API layer, not here — this migration
+// only adds the schema + backfills existing data so nothing gets locked
+// out; per-router membership checks are a separate, deferred pass).
+// `role` is independent of the org-level `Member.role` (Better Auth's
+// Organization plugin) — being an org admin does not imply project admin.
+enum ProjectMemberRole {
+  admin
+  member
+}
+
+model ProjectMember {
+  id              String            @id @default(cuid())
+  projectId       String
+  project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role            ProjectMemberRole @default(member)
+  createdAt       DateTime          @default(now())
+  taskAssignments TaskAssignee[]
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_member")
 }
 
 // Plane-style configurable workflow (CONTEXT.md §5.1.5): each project
@@ -212,22 +245,94 @@ model TaskState {
   @@map("task_state")
 }
 
+// Plane's own five-level scheme (`none` is an explicit "no priority set",
+// not the same as an unset/null column — keeps Board/Table grouping simple).
+enum TaskPriority {
+  urgent
+  high
+  medium
+  low
+  none
+}
+
 model Task {
-  id          String      @id @default(cuid())
+  id          String         @id @default(cuid())
   projectId   String
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title       String
   description String?
   stateId     String
-  state       TaskState @relation(fields: [stateId], references: [id])
+  state       TaskState      @relation(fields: [stateId], references: [id])
+  priority    TaskPriority   @default(none)
+  startDate   DateTime?
+  endDate     DateTime?
+  assignees   TaskAssignee[]
+  labels      TaskLabel[]
   createdById String
-  createdBy   User        @relation(fields: [createdById], references: [id])
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdBy   User           @relation(fields: [createdById], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   @@index([projectId])
   @@index([stateId])
+  @@index([projectId, startDate])
+  @@index([projectId, endDate])
   @@map("task")
+}
+
+// Plane-style project-scoped tag (CONTEXT.md §5.1's Label gap): a flat
+// name+color, no hierarchy — same "configurable set per project" shape as
+// TaskState, but without a group/position/isDefault since labels aren't a
+// workflow. `color` is a hex string the web UI renders as a dot/badge
+// background; the CLI/MCP just pass it through opaquely.
+model Label {
+  id        String      @id @default(cuid())
+  projectId String
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  color     String
+  createdAt DateTime    @default(now())
+  tasks     TaskLabel[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("label")
+}
+
+// Join table, same shape/precedent as TaskAssignee — "label must belong to
+// the task's own project" is an API-layer invariant, not a schema one.
+model TaskLabel {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  labelId   String
+  label     Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, labelId])
+  @@index([taskId])
+  @@index([labelId])
+  @@map("task_label")
+}
+
+// An assignee is a ProjectMember, not a bare User — being assignable to a
+// task requires having been added to that project first (§ProjectMember).
+// Invariant "projectMember.projectId === task.projectId" is enforced in
+// the API router, not the schema — same precedent as ChatMessage's
+// DM-vs-channel exclusivity (Prisma has no cross-column CHECK constraint
+// DSL to express it directly).
+model TaskAssignee {
+  id              String        @id @default(cuid())
+  taskId          String
+  task            Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  projectMemberId String
+  projectMember   ProjectMember @relation(fields: [projectMemberId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@unique([taskId, projectMemberId])
+  @@index([taskId])
+  @@index([projectMemberId])
+  @@map("task_assignee")
 }
 
 // Block-based storage (CONTEXT.md §5.1's doc entry) — `blocks` is a

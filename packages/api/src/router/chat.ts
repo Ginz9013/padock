@@ -2,6 +2,7 @@ import { z } from "zod";
 import { scopedProcedure, router } from "../trpc.ts";
 import { publishEvent } from "../redis.ts";
 import { runOrQueue } from "../approvalGate.ts";
+import { assertProjectMember } from "../projectAccess.ts";
 
 // DM (recipientId) or channel message (channelId) — never both.
 // §5.1.3/Phase 4, single-level channel per ADR-0001. `projectId` is an
@@ -22,6 +23,17 @@ export const chatRouter = router({
     .input(z.union([dmInput, channelInput]))
     .mutation(async ({ ctx, input }) =>
       runOrQueue(ctx, "chat.send", input, async () => {
+        if ("recipientId" in input) {
+          if (input.projectId) {
+            await assertProjectMember(ctx.db, input.projectId, ctx.user.id);
+          }
+        } else {
+          const channel = await ctx.db.channel.findUniqueOrThrow({ where: { id: input.channelId } });
+          if (channel.projectId) {
+            await assertProjectMember(ctx.db, channel.projectId, ctx.user.id);
+          }
+        }
+
         const message =
           "recipientId" in input
             ? await ctx.db.chatMessage.create({
@@ -62,6 +74,10 @@ export const chatRouter = router({
   history: scopedProcedure("chat", "read")
     .input(z.object({ channelId: z.string() }))
     .query(async ({ ctx, input }) => {
+      const channel = await ctx.db.channel.findUniqueOrThrow({ where: { id: input.channelId } });
+      if (channel.projectId) {
+        await assertProjectMember(ctx.db, channel.projectId, ctx.user.id);
+      }
       return ctx.db.chatMessage.findMany({
         where: { channelId: input.channelId },
         orderBy: { createdAt: "asc" },

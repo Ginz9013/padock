@@ -17,7 +17,8 @@ export async function sendMessage(
     return client.chat.send.mutate({ recipientId, content: args.message, projectId });
   }
   if (args.channel) {
-    const channelId = await resolveChannelId(client, args.channel);
+    const projectId = args.project ? await resolveProjectId(client, args.project) : undefined;
+    const channelId = await resolveChannelId(client, args.channel, projectId);
     return client.chat.send.mutate({ channelId, content: args.message });
   }
   throw new Error("Provide either `to` or `channel`");
@@ -28,8 +29,9 @@ export async function getConversation(client: Client, args: { with: string }) {
   return client.chat.conversation.query({ withUserId });
 }
 
-export async function getChatHistory(client: Client, args: { channel: string }) {
-  const channelId = await resolveChannelId(client, args.channel);
+export async function getChatHistory(client: Client, args: { channel: string; project?: string }) {
+  const projectId = args.project ? await resolveProjectId(client, args.project) : undefined;
+  const channelId = await resolveChannelId(client, args.channel, projectId);
   return client.chat.history.query({ channelId });
 }
 

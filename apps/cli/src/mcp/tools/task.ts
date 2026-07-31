@@ -1,10 +1,21 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { createClient } from "../../client.ts";
-import { createTask, listTasks, updateTaskStatus } from "../../actions/task.ts";
+import {
+  createTask,
+  listTasks,
+  editTask,
+  updateTaskStatus,
+  updateTaskPriority,
+  updateTaskDates,
+  updateTaskAssignees,
+  updateTaskLabels,
+} from "../../actions/task.ts";
 import { toolResult } from "../toolResult.ts";
 
 type Client = ReturnType<typeof createClient>;
+
+const priority = z.enum(["urgent", "high", "medium", "low", "none"]);
 
 export function registerTaskTools(server: McpServer, client: Client): void {
   server.registerTool(
@@ -15,6 +26,10 @@ export function registerTaskTools(server: McpServer, client: Client): void {
         project: z.string().describe("Project name or id"),
         title: z.string(),
         description: z.string().optional(),
+        priority: priority.optional(),
+        startDate: z.string().optional().describe("ISO date"),
+        endDate: z.string().optional().describe("ISO date"),
+        assignees: z.array(z.string()).optional().describe("Emails/names/ids — must already be project members"),
       },
     },
     async (args) => toolResult(() => createTask(client, args)),
@@ -37,5 +52,62 @@ export function registerTaskTools(server: McpServer, client: Client): void {
       inputSchema: { id: z.string(), status: z.string() },
     },
     async (args) => toolResult(() => updateTaskStatus(client, args)),
+  );
+
+  server.registerTool(
+    "task_edit",
+    {
+      description: "Edit a task's title and/or description.",
+      inputSchema: { id: z.string(), title: z.string().optional(), description: z.string().optional() },
+    },
+    async (args) => toolResult(() => editTask(client, args)),
+  );
+
+  server.registerTool(
+    "task_set_priority",
+    {
+      description: "Set a task's priority.",
+      inputSchema: { id: z.string(), priority },
+    },
+    async (args) => toolResult(() => updateTaskPriority(client, args)),
+  );
+
+  server.registerTool(
+    "task_set_dates",
+    {
+      description: "Set or clear a task's start/end dates. Omit a field to leave it untouched.",
+      inputSchema: {
+        id: z.string(),
+        startDate: z.string().optional().describe("ISO date"),
+        endDate: z.string().optional().describe("ISO date"),
+        clearStart: z.boolean().optional().describe("Clear the start date instead of setting it"),
+        clearEnd: z.boolean().optional().describe("Clear the end date instead of setting it"),
+      },
+    },
+    async (args) => toolResult(() => updateTaskDates(client, args)),
+  );
+
+  server.registerTool(
+    "task_set_assignees",
+    {
+      description: "Replace a task's full assignee list. Assignees must already be members of the task's project.",
+      inputSchema: {
+        id: z.string(),
+        assignees: z.array(z.string()).describe("Emails/names/ids"),
+      },
+    },
+    async (args) => toolResult(() => updateTaskAssignees(client, args)),
+  );
+
+  server.registerTool(
+    "task_set_labels",
+    {
+      description: "Replace a task's full label list. Labels must already exist in the task's project.",
+      inputSchema: {
+        id: z.string(),
+        labels: z.array(z.string()).describe("Label names or ids"),
+      },
+    },
+    async (args) => toolResult(() => updateTaskLabels(client, args)),
   );
 }
