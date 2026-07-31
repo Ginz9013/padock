@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import MarkdownEditorView, { type MarkdownEditorApi } from "@/components/markdown-editor-view-lazy";
 import { AutosaveIndicator, AutosaveStatus, type AutosaveState } from "@/components/autosave-status";
 import { DocAttributePanel, type DocAttributeValueRow } from "../../doc-attribute-panel";
+import { DocAuditLog } from "@/components/doc-audit-log";
 
 type Doc = { id: string; title: string; content: string; updatedAt: string; attributeValues: DocAttributeValueRow[] };
 
@@ -167,6 +168,8 @@ export default function DocDetailPage() {
         }}
         className="mt-3 min-h-[60vh]"
       />
+
+      <DocAuditLog docId={docId} />
     </div>
   );
 }

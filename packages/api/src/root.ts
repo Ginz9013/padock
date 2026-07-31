@@ -11,6 +11,7 @@ import { labelRouter } from "./router/label.ts";
 import { docAttributeRouter } from "./router/docAttribute.ts";
 import { apikeyRouter } from "./router/apikey.ts";
 import { approvalRouter } from "./router/approval.ts";
+import { auditLogRouter } from "./router/auditLog.ts";
 
 export const appRouter = router({
   health: publicProcedure.query(async ({ ctx }) => {
@@ -32,6 +33,7 @@ export const appRouter = router({
   docAttribute: docAttributeRouter,
   apikey: apikeyRouter,
   approval: approvalRouter,
+  auditLog: auditLogRouter,
 });
 
 export type AppRouter = typeof appRouter;
