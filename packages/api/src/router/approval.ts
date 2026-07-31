@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError, callTRPCProcedure } from "@trpc/server";
 import type { AnyRouter } from "@trpc/server";
 import type { Prisma } from "@padock/db";
-import { sessionProcedure, protectedProcedure, router } from "../trpc.ts";
+import { sessionProcedure, auditedSessionProcedure, protectedProcedure, router } from "../trpc.ts";
 
 // Phase 6b: reviewing/deciding pending writes from unattended PATs
 // (packages/api/src/approvalGate.ts). `list`/`approve`/`reject` are
@@ -38,7 +38,7 @@ export const approvalRouter = router({
       return request;
     }),
 
-  approve: sessionProcedure
+  approve: auditedSessionProcedure
     .input(z.object({ id: z.string(), note: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const request = await ctx.db.approvalRequest.findUniqueOrThrow({ where: { id: input.id } });
@@ -87,7 +87,7 @@ export const approvalRouter = router({
       });
     }),
 
-  reject: sessionProcedure
+  reject: auditedSessionProcedure
     .input(z.object({ id: z.string(), note: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const request = await ctx.db.approvalRequest.findUniqueOrThrow({ where: { id: input.id } });

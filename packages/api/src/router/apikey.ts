@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { auth } from "@padock/auth";
-import { sessionProcedure, router } from "../trpc.ts";
+import { auditedSessionProcedure, router } from "../trpc.ts";
 
 // PAT 細粒度權限 (Phase 6, CONTEXT.md §6/§9): `scopes` is a flat list of
 // "resource:action" pairs (e.g. "task:read"), grouped here into the
@@ -13,7 +13,7 @@ import { sessionProcedure, router } from "../trpc.ts";
 // auth.api.createApiKey directly from server code, not by forwarding
 // a client request.
 export const apikeyRouter = router({
-  create: sessionProcedure
+  create: auditedSessionProcedure
     .input(
       z.object({
         name: z.string().min(1),
