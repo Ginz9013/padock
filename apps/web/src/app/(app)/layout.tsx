@@ -2,16 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 
 import { authClient, useSession } from "@/lib/auth-client";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ChatSidebarProvider } from "@/components/chat/chat-sidebar-provider";
 import { ChatRightSidebar } from "@/components/chat/chat-right-sidebar";
+
+type Project = { id: string; name: string };
 
 // Sidebar-first shell, not a top-nav bar (this session's UX decision,
 // CONTEXT.md §5's UX shell): the app is organized by "where you are"
@@ -33,11 +36,13 @@ import { ChatRightSidebar } from "@/components/chat/chat-right-sidebar";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { id: projectId } = useParams<{ id?: string }>();
   const { data: session } = useSession();
   const leftPanelRef = useRef<PanelImperativeHandle>(null);
   const chatPanelRef = useRef<PanelImperativeHandle>(null);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [projectName, setProjectName] = useState<string | null>(null);
   const previousPathnameRef = useRef(pathname);
 
   // Entering a project (from outside it) auto-collapses the chat sidebar to
@@ -52,6 +57,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       chatPanelRef.current?.collapse();
     }
   }, [pathname]);
+
+  // Project title lives here (not in projects/[id]/layout.tsx) so it can
+  // sit in a persistent sub-header row rather than scrolling away with
+  // page content — this component already owns the row that splits into
+  // sidebar/main/sidebar columns, so the sub-header naturally inherits
+  // the main column's width instead of the full-width app header's.
+  useEffect(() => {
+    if (!projectId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setProjectName(null);
+      return;
+    }
+    trpc.project.list.query().then((projects) => {
+      setProjectName((projects as Project[]).find((p) => p.id === projectId)?.name ?? null);
+    });
+  }, [projectId]);
 
   async function handleSignOut() {
     await authClient.signOut();
@@ -109,7 +130,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize="60" minSize="30">
-              <main className="h-full overflow-y-auto px-6 py-8">{children}</main>
+              <div className="flex h-full flex-col">
+                {projectName && (
+                  <div className="shrink-0 border-b px-6 py-2">
+                    <h2 className="truncate text-sm font-medium">{projectName}</h2>
+                  </div>
+                )}
+                <main className="min-h-0 flex-1 overflow-y-auto px-6 py-8">{children}</main>
+              </div>
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel
