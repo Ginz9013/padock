@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import MarkdownEditorView, { type MarkdownEditorApi } from "@/components/markdown-editor-view-lazy";
 import { AutosaveIndicator, AutosaveStatus, type AutosaveState } from "@/components/autosave-status";
+import { TaskAuditLog } from "@/components/task-audit-log";
 import { PRIORITIES } from "./task-types";
 import type { ProjectLabel, ProjectMemberSummary, Task, TaskPriority, TaskState } from "./task-types";
 import { LabelBadge } from "./label-badge";
@@ -307,6 +308,8 @@ function TaskDetailForm({
             </Select>
           )}
         </div>
+
+        <TaskAuditLog taskId={task.id} />
       </div>
     </>
   );

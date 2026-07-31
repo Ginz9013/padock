@@ -42,4 +42,45 @@ export const auditLogRouter = router({
         actorName: log.actor.name,
       }));
     }),
+
+  // Same JSONB-filter approach as forDoc above, but simpler: every write
+  // endpoint on task.ts (update/updateState/updatePriority/updateDates/
+  // updateAssignees/updateLabels) takes the target as `id`, so one path
+  // list suffices instead of doc's id-vs-docId split. task.create has the
+  // same gap as doc.create — no id in its own input to match back against.
+  forTask: scopedProcedure("task", "read")
+    .input(z.object({ taskId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const task = await ctx.db.task.findUnique({
+        where: { id: input.taskId },
+        select: { projectId: true },
+      });
+      if (!task) throw new TRPCError({ code: "NOT_FOUND", message: "Task not found" });
+      await assertProjectMember(ctx.db, task.projectId, ctx.user.id);
+
+      const logs = await ctx.db.auditLog.findMany({
+        where: {
+          path: {
+            in: [
+              "task.update",
+              "task.updateState",
+              "task.updatePriority",
+              "task.updateDates",
+              "task.updateAssignees",
+              "task.updateLabels",
+            ],
+          },
+          input: { path: ["id"], equals: input.taskId },
+        },
+        orderBy: { createdAt: "desc" },
+        include: { actor: { select: { name: true } } },
+      });
+
+      return logs.map((log) => ({
+        id: log.id,
+        path: log.path,
+        createdAt: log.createdAt,
+        actorName: log.actor.name,
+      }));
+    }),
 });
