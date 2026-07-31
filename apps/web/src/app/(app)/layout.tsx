@@ -133,7 +133,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="flex h-full flex-col">
                 {projectName && (
                   <div className="shrink-0 border-b px-6 py-2">
-                    <h2 className="truncate text-sm font-medium">{projectName}</h2>
+                    {/* h-7/leading-7 matches the sidebars' own border-b
+                        px-3 py-2 header rows, whose height comes from a
+                        size-7 (28px) collapse button — same total row
+                        height (28px content + 8px top/bottom padding). */}
+                    <h2 className="h-7 truncate text-sm leading-7 font-medium">{projectName}</h2>
                   </div>
                 )}
                 <main className="min-h-0 flex-1 overflow-y-auto px-6 py-8">{children}</main>
