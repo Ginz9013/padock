@@ -162,7 +162,7 @@ export default function DocDetailPage() {
         onReady={(api) => {
           editorApi.current = api;
         }}
-        className="min-h-[60vh]"
+        className="mt-3 min-h-[60vh]"
       />
     </div>
   );
