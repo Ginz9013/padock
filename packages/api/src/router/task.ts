@@ -122,13 +122,22 @@ export const taskRouter = router({
         id: z.string(),
         title: z.string().min(1).optional(),
         description: z.string().optional(),
+        // Optimistic lock (CONTEXT.md §5.1.16, same pattern as
+        // doc.update) — the web UI's autosave always sends the
+        // `updatedAt` it last saw; a mismatch throws CONFLICT instead
+        // of saving. CLI/MCP callers omit this and keep today's
+        // fire-and-forget write behavior.
+        expectedUpdatedAt: z.coerce.date().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) =>
       runOrQueue(ctx, "task.update", input, async () => {
-        const { id, ...rest } = input;
+        const { id, expectedUpdatedAt, ...rest } = input;
         const task = await ctx.db.task.findUniqueOrThrow({ where: { id } });
         await assertProjectMember(ctx.db, task.projectId, ctx.user.id);
+        if (expectedUpdatedAt && task.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
+          throw new TRPCError({ code: "CONFLICT", message: "Task was updated elsewhere" });
+        }
         return ctx.db.task.update({ where: { id }, data: rest });
       }),
     ),
