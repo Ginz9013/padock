@@ -184,6 +184,7 @@ model Project {
   docs           Doc[]
   chatMessages   ChatMessage[]
   channels       Channel[]
+  docAttributeDefinitions DocAttributeDefinition[]
 
   @@index([organizationId])
   @@map("project")
@@ -355,9 +356,81 @@ model Doc {
   createdBy   User     @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  attributeValues DocAttributeValue[]
 
   @@index([projectId])
   @@map("doc")
+}
+
+// Custom doc attributes (CONTEXT.md §5.1.18): a project-scoped, user-defined
+// property schema (Notion-style), not a fixed set of columns — every
+// project starts with zero attributes. `type` is immutable after creation
+// (no in-place text->number conversion); renaming/reordering stay editable.
+// `order` drives manual sort in the property panel (§5.1.18's "needs manual
+// sort" decision), same shape as TaskState.position.
+enum DocAttributeType {
+  text
+  number
+  select
+  date
+  checkbox
+}
+
+model DocAttributeDefinition {
+  id        String            @id @default(cuid())
+  projectId String
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  type      DocAttributeType
+  order     Int
+  createdAt DateTime          @default(now())
+  options   DocAttributeOption[]
+  values    DocAttributeValue[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("doc_attribute_definition")
+}
+
+// Choices for a `select`-type definition only — its own table rather than
+// reusing Label, since overloading Label's meaning to double as generic
+// select-options would blur what a "label" is (§5.1.18).
+model DocAttributeOption {
+  id           String                  @id @default(cuid())
+  definitionId String
+  definition   DocAttributeDefinition  @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  name         String
+  color        String
+  order        Int
+  values       DocAttributeValue[]
+
+  @@index([definitionId])
+  @@map("doc_attribute_option")
+}
+
+// EAV value row, one typed column per possible DocAttributeType so Postgres
+// enforces real column types/FKs instead of pushing all validation into the
+// API layer (§5.1.18, chosen over a single Json column on Doc). Only
+// written when a value is actually set — a doc with nothing filled in for
+// a given attribute simply has no row, no backfill on new definitions.
+model DocAttributeValue {
+  id             String                  @id @default(cuid())
+  docId          String
+  doc            Doc                     @relation(fields: [docId], references: [id], onDelete: Cascade)
+  definitionId   String
+  definition     DocAttributeDefinition  @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  valueText      String?
+  valueNumber    Float?
+  valueDate      DateTime?
+  valueBoolean   Boolean?
+  selectOptionId String?
+  selectOption   DocAttributeOption?     @relation(fields: [selectOptionId], references: [id], onDelete: Cascade)
+  updatedAt      DateTime                @updatedAt
+
+  @@unique([docId, definitionId])
+  @@index([docId])
+  @@index([definitionId])
+  @@map("doc_attribute_value")
 }
 
 // Org-wide or project-scoped (projectId optional, same opt-in pattern

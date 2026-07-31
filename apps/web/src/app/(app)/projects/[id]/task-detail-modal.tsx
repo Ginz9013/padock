@@ -1,18 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { X } from "lucide-react";
+import { TRPCClientError } from "@trpc/client";
 
-import { trpc } from "@/lib/trpc";
+import { trpc, unwrapWrite } from "@/lib/trpc";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import MarkdownEditorView, { type MarkdownEditorApi } from "@/components/markdown-editor-view-lazy";
+import { AutosaveIndicator, AutosaveStatus, type AutosaveState } from "@/components/autosave-status";
 import { PRIORITIES } from "./task-types";
 import type { ProjectLabel, ProjectMemberSummary, Task, TaskPriority, TaskState } from "./task-types";
 import { LabelBadge } from "./label-badge";
+
+const AUTOSAVE_DELAY_MS = 1500;
 
 // Single place every view (List/Board/Table/Calendar/Timeline) opens to
 // edit a task — clicking a task anywhere always opens this instead of
@@ -61,35 +65,75 @@ function TaskDetailForm({
   onChanged: () => Promise<void>;
 }) {
   const [title, setTitle] = useState(task.title);
-  const [description, setDescription] = useState(task.description ?? "");
+  const [status, setStatus] = useState<AutosaveState>("idle");
+  const editorApi = useRef<MarkdownEditorApi | null>(null);
+  // Shared by every mutation below that touches Task.updatedAt (title/
+  // description's own debounced save, plus state/priority/dates) — not
+  // just the description autosave — so an in-between state/priority
+  // change can never make the description editor's next autosave
+  // spuriously conflict against itself (CONTEXT.md §5.1.16).
+  const knownUpdatedAt = useRef(task.updatedAt);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function saveTitle() {
-    const trimmed = title.trim();
-    if (trimmed && trimmed !== task.title) {
-      await trpc.task.update.mutate({ id: task.id, title: trimmed });
+  // Title and description are bundled into one debounced save (same
+  // pattern as the Doc editor) rather than title-on-blur + description-
+  // on-change as two independent writes, precisely to avoid the above
+  // staleness trap between the two fields.
+  async function save(force = false) {
+    if (!editorApi.current) return;
+    setStatus("saving");
+    try {
+      const description = await editorApi.current.getMarkdown();
+      const updated = unwrapWrite(
+        await trpc.task.update.mutate({
+          id: task.id,
+          title: title.trim() || task.title,
+          description,
+          expectedUpdatedAt: force ? undefined : knownUpdatedAt.current,
+        }),
+      );
+      knownUpdatedAt.current = updated.updatedAt;
+      setStatus("saved");
       await onChanged();
+    } catch (err) {
+      if (err instanceof TRPCClientError && err.data?.code === "CONFLICT") {
+        setStatus("conflict");
+        return;
+      }
+      setStatus("idle");
+      throw err;
     }
   }
 
-  async function saveDescription() {
-    if (description !== (task.description ?? "")) {
-      await trpc.task.update.mutate({ id: task.id, description });
-      await onChanged();
-    }
+  function scheduleSave() {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => void save(), AUTOSAVE_DELAY_MS);
+  }
+
+  async function reloadLatest() {
+    const fresh = await trpc.task.get.query({ id: task.id });
+    setTitle(fresh.title);
+    knownUpdatedAt.current = fresh.updatedAt;
+    await editorApi.current?.replaceMarkdown(fresh.description ?? "");
+    setStatus("idle");
+    await onChanged();
   }
 
   async function changeState(stateId: string) {
-    await trpc.task.updateState.mutate({ id: task.id, stateId });
+    const updated = unwrapWrite(await trpc.task.updateState.mutate({ id: task.id, stateId }));
+    knownUpdatedAt.current = updated.updatedAt;
     await onChanged();
   }
 
   async function changePriority(priority: TaskPriority) {
-    await trpc.task.updatePriority.mutate({ id: task.id, priority });
+    const updated = unwrapWrite(await trpc.task.updatePriority.mutate({ id: task.id, priority }));
+    knownUpdatedAt.current = updated.updatedAt;
     await onChanged();
   }
 
   async function changeDate(field: "startDate" | "endDate", value: string) {
-    await trpc.task.updateDates.mutate({ id: task.id, [field]: value || null });
+    const updated = unwrapWrite(await trpc.task.updateDates.mutate({ id: task.id, [field]: value || null }));
+    knownUpdatedAt.current = updated.updatedAt;
     await onChanged();
   }
 
@@ -127,21 +171,29 @@ function TaskDetailForm({
     <>
       <SheetHeader>
         <SheetTitle className="sr-only">{task.title || "Task details"}</SheetTitle>
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={saveTitle}
-          className="border-none px-0 text-base font-semibold shadow-none focus-visible:ring-0"
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              scheduleSave();
+            }}
+            className="border-none px-0 text-base font-semibold shadow-none focus-visible:ring-0"
+          />
+          <AutosaveIndicator status={status} />
+        </div>
       </SheetHeader>
 
       <div className="flex flex-col gap-4 px-4 pb-4">
-        <Textarea
-          placeholder="Description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          onBlur={saveDescription}
-          rows={4}
+        <AutosaveStatus status={status} onReloadLatest={() => void reloadLatest()} onForceSave={() => void save(true)} />
+
+        <MarkdownEditorView
+          initialContent={task.description ?? ""}
+          onChange={scheduleSave}
+          onReady={(api) => {
+            editorApi.current = api;
+          }}
+          className="min-h-32"
         />
 
         <div className="grid grid-cols-2 gap-3">

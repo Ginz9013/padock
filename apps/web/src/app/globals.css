@@ -168,3 +168,18 @@
     @apply font-sans;
   }
 }
+
+/* BlockNote hardcodes its own light/dark palette (#fff / #1f1f1f) tied to
+   the OS color scheme, independent of Padock's own theme variables above —
+   so the editor renders as a mismatched gray box. Make it transparent so it
+   inherits whatever background it's placed on instead. Also trim the
+   default 54px side gutter (reserved for the drag-handle/"+" menu), which
+   reads as excessive left whitespace in Padock's narrower content areas.
+   Selector is doubled up (`.bn-container .bn-editor`) so its specificity
+   beats BlockNote's own `.bn-editor` rule regardless of which stylesheet's
+   <style> tag lands in the DOM last — BlockNote's CSS is imported from a
+   lazily-loaded component, so load order isn't reliable. */
+.bn-container .bn-editor {
+  background-color: transparent;
+  padding-inline: 24px;
+}

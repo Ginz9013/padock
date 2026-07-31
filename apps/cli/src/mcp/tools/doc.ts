@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { createClient } from "../../client.ts";
-import { createDoc, listDocs, getDoc, updateDoc } from "../../actions/doc.ts";
+import { createDoc, listDocs, getDoc, updateDoc, deleteDoc } from "../../actions/doc.ts";
 import { toolResult } from "../toolResult.ts";
 
 type Client = ReturnType<typeof createClient>;
@@ -49,5 +49,14 @@ export function registerDocTools(server: McpServer, client: Client): void {
       },
     },
     async (args) => toolResult(() => updateDoc(client, args)),
+  );
+
+  server.registerTool(
+    "doc_delete",
+    {
+      description: "Delete a doc.",
+      inputSchema: { id: z.string() },
+    },
+    async (args) => toolResult(() => deleteDoc(client, args)),
   );
 }

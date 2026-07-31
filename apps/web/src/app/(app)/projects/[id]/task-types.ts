@@ -31,6 +31,7 @@ export type Task = {
   priority: TaskPriority;
   startDate: string | null;
   endDate: string | null;
+  updatedAt: string;
   assignees: TaskAssignee[];
   labels: TaskLabel[];
 };
