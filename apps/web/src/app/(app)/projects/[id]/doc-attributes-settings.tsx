@@ -186,7 +186,11 @@ function SortableAttributeRow({
   return (
     <li
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      // CSS.Transform (not used here) also applies dnd-kit's computed
+      // scaleX/scaleY, which stretches/squishes the dragged row to match
+      // whatever slot it's currently hovering — rows here are already a
+      // fixed height, so only the translate is wanted.
+      style={{ transform: CSS.Translate.toString(transform), transition }}
       className={`rounded-md border bg-card px-3 py-2 ${isDragging ? "z-10 opacity-70" : ""}`}
     >
       <div className="flex items-center gap-2">
