@@ -9,9 +9,9 @@ type LogEntry = { id: string; path: string; createdAt: string; actorName: string
 // never appears here (its input has no id to match back against, see that
 // router's comment), so only these three ever show up in practice.
 const VERB_BY_PATH: Record<string, string> = {
-  "doc.update": "編輯了文件",
-  "doc.delete": "刪除了文件",
-  "doc.setAttributeValue": "更新了屬性",
+  "doc.update": "edited the doc",
+  "doc.delete": "deleted the doc",
+  "doc.setAttributeValue": "updated an attribute",
 };
 
 export function DocAuditLog({ docId }: { docId: string }) {
@@ -25,7 +25,7 @@ export function DocAuditLog({ docId }: { docId: string }) {
 
   return (
     <div className="mt-8 flex flex-col gap-2 border-t pt-4">
-      <p className="text-xs font-medium text-muted-foreground">異動紀錄</p>
+      <p className="text-xs font-medium text-muted-foreground">Activity</p>
       <ul className="flex flex-col gap-1.5">
         {logs.map((log) => (
           <li key={log.id} className="text-xs text-muted-foreground">

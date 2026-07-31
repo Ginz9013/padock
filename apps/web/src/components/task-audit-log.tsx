@@ -9,12 +9,12 @@ type LogEntry = { id: string; path: string; createdAt: string; actorName: string
 // never appears here (its input has no id to match back against, same gap
 // as doc.create), so only these six ever show up in practice.
 const VERB_BY_PATH: Record<string, string> = {
-  "task.update": "編輯了任務",
-  "task.updateState": "變更了狀態",
-  "task.updatePriority": "變更了優先度",
-  "task.updateDates": "變更了日期",
-  "task.updateAssignees": "變更了指派對象",
-  "task.updateLabels": "變更了標籤",
+  "task.update": "edited the task",
+  "task.updateState": "changed the state",
+  "task.updatePriority": "changed the priority",
+  "task.updateDates": "changed the dates",
+  "task.updateAssignees": "changed the assignees",
+  "task.updateLabels": "changed the labels",
 };
 
 export function TaskAuditLog({ taskId }: { taskId: string }) {
@@ -28,7 +28,7 @@ export function TaskAuditLog({ taskId }: { taskId: string }) {
 
   return (
     <div className="mt-2 flex flex-col gap-2 border-t pt-4">
-      <p className="text-xs font-medium text-muted-foreground">異動紀錄</p>
+      <p className="text-xs font-medium text-muted-foreground">Activity</p>
       <ul className="flex flex-col gap-1.5">
         {logs.map((log) => (
           <li key={log.id} className="text-xs text-muted-foreground">
