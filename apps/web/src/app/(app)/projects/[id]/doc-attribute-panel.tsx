@@ -134,7 +134,7 @@ function AttributeControl({
         <Input
           defaultValue={(value as string | null) ?? ""}
           onBlur={(e) => onSave(e.target.value.trim() === "" ? null : e.target.value)}
-          className="h-7"
+          className="h-7 border-transparent hover:border-input"
         />
       );
     case "number":
@@ -143,7 +143,7 @@ function AttributeControl({
           type="number"
           defaultValue={value === null ? "" : String(value)}
           onBlur={(e) => onSave(e.target.value === "" ? null : Number(e.target.value))}
-          className="h-7"
+          className="h-7 border-transparent hover:border-input"
         />
       );
     case "date": {
