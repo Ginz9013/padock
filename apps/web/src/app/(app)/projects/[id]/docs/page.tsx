@@ -55,7 +55,7 @@ export default function ProjectDocsPage() {
       ) : (
         <ul className="flex flex-col gap-1">
           {docs.map((doc) => (
-            <li key={doc.id} className="group flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
+            <li key={doc.id} className="group flex cursor-pointer gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
               <Link href={`/projects/${projectId}/docs/${doc.id}`} className="flex min-w-0 flex-1 items-center gap-2">
                 <FileText className="size-3.5 shrink-0 text-muted-foreground" />
                 <span className="truncate">{doc.title}</span>
@@ -68,7 +68,7 @@ export default function ProjectDocsPage() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="size-6 shrink-0 opacity-0 group-hover:opacity-100"
+                    className="size-6 shrink-0 self-center opacity-0 group-hover:opacity-100"
                     aria-label={`Delete ${doc.title}`}
                   >
                     <Trash2 className="size-3.5" />

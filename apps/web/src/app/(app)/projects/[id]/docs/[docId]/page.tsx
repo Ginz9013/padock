@@ -120,7 +120,7 @@ export default function DocDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 px-6">
       <div className="flex items-center justify-between">
         <Link
           href={`/projects/${projectId}/docs`}
@@ -150,7 +150,7 @@ export default function DocDetailPage() {
           scheduleSave();
         }}
         placeholder="Untitled"
-        className="h-auto border-none bg-transparent px-0 py-0 font-heading text-4xl font-semibold focus-visible:ring-0 md:text-4xl"
+        className="h-auto border-none bg-transparent py-0 pl-6 pr-0 font-heading text-4xl font-semibold focus-visible:ring-0 md:text-4xl"
       />
 
       <MarkdownEditorView
