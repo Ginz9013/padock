@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 
-export type AutosaveState = "idle" | "saving" | "saved" | "conflict";
+export type AutosaveState = "idle" | "saving" | "saved" | "conflict" | "deleted";
 
 // Shared by every entity using the debounce-autosave + optimistic-lock
 // pattern (CONTEXT.md §5.1.16 — Doc, and now Task's description). On
@@ -27,6 +27,16 @@ export function AutosaveStatus({
             強制覆蓋
           </Button>
         </div>
+      </div>
+    );
+  }
+  // Distinct from "conflict" (CONTEXT.md §5.1.17) — there's nothing left
+  // to reload once the row is actually gone, so no reload/overwrite
+  // choice is offered, just the fact that further edits won't be saved.
+  if (status === "deleted") {
+    return (
+      <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
+        此內容已被刪除，你的變更未儲存。
       </div>
     );
   }
