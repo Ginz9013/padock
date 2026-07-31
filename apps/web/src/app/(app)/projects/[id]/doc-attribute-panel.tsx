@@ -107,7 +107,7 @@ export function DocAttributePanel({
   if (!loaded || definitions.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-2 border-b border-border pb-4">
+    <div className="flex flex-col gap-2 border-b border-border px-6 pb-4">
       <h2 className="text-sm font-medium text-muted-foreground">Properties</h2>
       {definitions.map((def) => (
         <div key={def.id} className="grid grid-cols-[8rem_1fr] items-center gap-3">
