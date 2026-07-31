@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { Command } from "commander";
 import { createClient, run } from "../client.ts";
-import { createDoc, listDocs, getDoc, updateDoc } from "../actions/doc.ts";
+import { createDoc, listDocs, getDoc, updateDoc, deleteDoc } from "../actions/doc.ts";
 
 function readContent(opts: { content?: string; file?: string }): string {
   if (opts.file) {
@@ -52,4 +52,9 @@ export function registerDocCommands(program: Command): void {
       const content = opts.content !== undefined || opts.file ? readContent(opts) : undefined;
       await run(() => updateDoc(client, { id, title: opts.title, content }));
     });
+
+  doc.command("delete <id>").action(async (id: string) => {
+    const client = createClient();
+    await run(() => deleteDoc(client, { id }));
+  });
 }

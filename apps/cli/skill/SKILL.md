@@ -1,7 +1,7 @@
 ---
 name: padock
 description: Use when the user wants to work with a Padock workspace — find or search project info (docs/tasks/chat), create or update tasks, read or write docs, or message a colleague. Triggers on requests like "find X in project Y", "what's the status of...", "mark this task as done/review", "send this to <colleague>".
-version: 0.8.0
+version: 0.9.0
 ---
 
 # Padock
@@ -55,6 +55,7 @@ to touch.
     padock doc list --project=<name>
     padock doc get <id>
     padock doc update <id> [--title=<title>] (--content=<text> | --file=<path>)
+    padock doc delete <id>
     padock channel create <title> [--project=<name>]
     padock channel list [--project=<name>]
     padock chat send --to=<email|name> --message=<text> [--project=<name>]

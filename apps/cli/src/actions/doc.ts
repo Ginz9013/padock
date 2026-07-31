@@ -30,3 +30,7 @@ export async function updateDoc(
 ) {
   return client.doc.update.mutate({ id: args.id, title: args.title, content: args.content });
 }
+
+export async function deleteDoc(client: Client, args: { id: string }) {
+  return client.doc.delete.mutate({ id: args.id });
+}
