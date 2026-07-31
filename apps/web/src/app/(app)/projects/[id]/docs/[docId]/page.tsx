@@ -156,8 +156,6 @@ export default function DocDetailPage() {
 
       <DocAttributePanel key={docId} projectId={projectId} docId={docId} initialValues={doc.attributeValues} />
 
-      <hr className="my-2 border-border" />
-
       <MarkdownEditorView
         initialContent={doc.content}
         onChange={scheduleSave}
