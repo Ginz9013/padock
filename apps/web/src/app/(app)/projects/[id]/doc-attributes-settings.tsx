@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
+import { GripVertical, Plus, X } from "lucide-react";
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import { trpc, unwrapWrite } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -21,10 +29,11 @@ import { LABEL_COLORS } from "./task-types";
 
 // Project-scoped custom attribute schema for Docs (CONTEXT.md §5.1.18) —
 // same "any project member can edit" access model as Labels above it, no
-// admin-only restriction. Reordering is up/down buttons rather than
-// drag-and-drop: @dnd-kit/sortable isn't a dependency here (only
-// @dnd-kit/core, used for the Task Board's column drag, a different
-// interaction), and a short list of attribute definitions doesn't need it.
+// admin-only restriction. Reordering is drag-and-drop via @dnd-kit/sortable
+// (a new dependency here — the Task Board's own drag, elsewhere in this
+// directory, uses raw @dnd-kit/core useDraggable/useDroppable instead,
+// since a Kanban column drop target isn't "reorder this list" the way a
+// sortable's own purpose-built primitives are).
 export function DocAttributesSettings({ projectId }: { projectId: string }) {
   const [definitions, setDefinitions] = useState<DocAttributeDefinition[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -76,14 +85,16 @@ export function DocAttributesSettings({ projectId }: { projectId: string }) {
     }
   }
 
-  async function move(index: number, direction: -1 | 1) {
-    const target = index + direction;
-    if (target < 0 || target >= definitions.length) return;
-    const reordered = [...definitions];
-    const a = reordered[index]!;
-    const b = reordered[target]!;
-    reordered[index] = b;
-    reordered[target] = a;
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const fromIndex = definitions.findIndex((d) => d.id === active.id);
+    const toIndex = definitions.findIndex((d) => d.id === over.id);
+    if (fromIndex === -1 || toIndex === -1) return;
+    const reordered = arrayMove(definitions, fromIndex, toIndex);
+    setDefinitions(reordered); // optimistic — avoids the row snapping back before refresh() resolves
     setError(null);
     try {
       unwrapWrite(
@@ -92,6 +103,7 @@ export function DocAttributesSettings({ projectId }: { projectId: string }) {
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reorder attributes");
+      await refresh();
     }
   }
 
@@ -133,75 +145,101 @@ export function DocAttributesSettings({ projectId }: { projectId: string }) {
       {definitions.length === 0 ? (
         <p className="text-xs text-muted-foreground">No custom attributes.</p>
       ) : (
-        <ul className="flex flex-col gap-1.5">
-          {definitions.map((def, index) => (
-            <li key={def.id} className="rounded-md border px-3 py-2">
-              <div className="flex items-center gap-2">
-                <div className="flex shrink-0 flex-col">
-                  <button
-                    type="button"
-                    aria-label="Move up"
-                    disabled={index === 0}
-                    onClick={() => void move(index, -1)}
-                    className="text-muted-foreground hover:text-foreground disabled:opacity-30"
-                  >
-                    <ArrowUp className="size-3" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Move down"
-                    disabled={index === definitions.length - 1}
-                    onClick={() => void move(index, 1)}
-                    className="text-muted-foreground hover:text-foreground disabled:opacity-30"
-                  >
-                    <ArrowDown className="size-3" />
-                  </button>
-                </div>
-                <Input
-                  defaultValue={def.name}
-                  onBlur={(e) => {
-                    const trimmed = e.target.value.trim();
-                    if (trimmed && trimmed !== def.name) void renameDefinition(def.id, trimmed);
-                  }}
-                  className="h-7 max-w-48"
+        <DndContext sensors={sensors} onDragEnd={(e) => void handleDragEnd(e)}>
+          <SortableContext items={definitions.map((d) => d.id)} strategy={verticalListSortingStrategy}>
+            <ul className="flex flex-col gap-1.5">
+              {definitions.map((def) => (
+                <SortableAttributeRow
+                  key={def.id}
+                  definition={def}
+                  onRename={(name) => renameDefinition(def.id, name)}
+                  onDelete={() => deleteDefinition(def.id)}
+                  onCreateOption={(name, color) => createOption(def.id, name, color)}
+                  onDeleteOption={deleteOption}
                 />
-                <Badge variant="secondary">{def.type}</Badge>
-                <ConfirmDialog
-                  trigger={
-                    <Button size="icon-sm" variant="ghost" className="ml-auto" aria-label={`Delete ${def.name}`}>
-                      <X className="size-3.5" />
-                    </Button>
-                  }
-                  title={`Delete "${def.name}"?`}
-                  description="Every doc's value for this attribute will be deleted too. This can't be undone."
-                  onConfirm={() => deleteDefinition(def.id)}
-                />
-              </div>
-
-              {def.type === "select" && (
-                <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-5">
-                  {def.options.map((opt) => (
-                    <Badge key={opt.id} variant="secondary" className="gap-1.5 pr-1">
-                      <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: opt.color }} />
-                      {opt.name}
-                      <button
-                        type="button"
-                        onClick={() => void deleteOption(opt.id)}
-                        aria-label={`Remove ${opt.name}`}
-                        className="rounded-full hover:bg-muted-foreground/20"
-                      >
-                        <X className="size-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                  <NewOptionForm onCreate={(name, color) => createOption(def.id, name, color)} />
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
       )}
     </div>
+  );
+}
+
+function SortableAttributeRow({
+  definition,
+  onRename,
+  onDelete,
+  onCreateOption,
+  onDeleteOption,
+}: {
+  definition: DocAttributeDefinition;
+  onRename: (name: string) => void;
+  onDelete: () => Promise<void>;
+  onCreateOption: (name: string, color: string) => void;
+  onDeleteOption: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: definition.id,
+  });
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`rounded-md border bg-card px-3 py-2 ${isDragging ? "z-10 opacity-70" : ""}`}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label={`Reorder ${definition.name}`}
+          className="shrink-0 cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-3.5" />
+        </button>
+        <Input
+          defaultValue={definition.name}
+          onBlur={(e) => {
+            const trimmed = e.target.value.trim();
+            if (trimmed && trimmed !== definition.name) onRename(trimmed);
+          }}
+          className="h-7 max-w-48"
+        />
+        <Badge variant="secondary">{definition.type}</Badge>
+        <ConfirmDialog
+          trigger={
+            <Button size="icon-sm" variant="ghost" className="ml-auto" aria-label={`Delete ${definition.name}`}>
+              <X className="size-3.5" />
+            </Button>
+          }
+          title={`Delete "${definition.name}"?`}
+          description="Every doc's value for this attribute will be deleted too. This can't be undone."
+          onConfirm={onDelete}
+        />
+      </div>
+
+      {definition.type === "select" && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-5">
+          {definition.options.map((opt) => (
+            <Badge key={opt.id} variant="secondary" className="gap-1.5 pr-1">
+              <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: opt.color }} />
+              {opt.name}
+              <button
+                type="button"
+                onClick={() => onDeleteOption(opt.id)}
+                aria-label={`Remove ${opt.name}`}
+                className="rounded-full hover:bg-muted-foreground/20"
+              >
+                <X className="size-3" />
+              </button>
+            </Badge>
+          ))}
+          <NewOptionForm onCreate={onCreateOption} />
+        </div>
+      )}
+    </li>
   );
 }
 
