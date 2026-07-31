@@ -1,10 +1,28 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { Prisma, type PrismaClient } from "@padock/db";
 import { remark } from "remark";
 import { toString as mdastToString } from "mdast-util-to-string";
 import { scopedProcedure, router } from "../trpc.ts";
 import { runOrQueue } from "../approvalGate.ts";
 import { assertProjectMember } from "../projectAccess.ts";
+
+// findUniqueOrThrow's Prisma-level "record not found" (P2025) surfaces
+// as a distinct NOT_FOUND here rather than a generic 500 — matters most
+// for update (CONTEXT.md §5.1.17): a doc deleted out from under an open
+// editor needs a different recovery UX ("this doc was deleted, your
+// changes weren't saved") than a version CONFLICT ("reload vs.
+// overwrite") gives, since there's nothing left to reload.
+async function findDocOrNotFound(db: PrismaClient, id: string) {
+  try {
+    return await db.doc.findUniqueOrThrow({ where: { id } });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Doc not found" });
+    }
+    throw err;
+  }
+}
 
 // Storage is block-based (mdast tree, per the Doc model) but the
 // CLI/Skill contract from Phase 1 doesn't change: callers only ever
@@ -59,7 +77,7 @@ export const docRouter = router({
   get: scopedProcedure("doc", "read")
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const doc = await ctx.db.doc.findUniqueOrThrow({ where: { id: input.id } });
+      const doc = await findDocOrNotFound(ctx.db, input.id);
       await assertProjectMember(ctx.db, doc.projectId, ctx.user.id);
       return toDocResponse(doc);
     }),
@@ -82,7 +100,7 @@ export const docRouter = router({
     .mutation(async ({ ctx, input }) =>
       runOrQueue(ctx, "doc.update", input, async () => {
         const { id, content, expectedUpdatedAt, ...rest } = input;
-        const existing = await ctx.db.doc.findUniqueOrThrow({ where: { id } });
+        const existing = await findDocOrNotFound(ctx.db, id);
         await assertProjectMember(ctx.db, existing.projectId, ctx.user.id);
         if (expectedUpdatedAt && existing.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
           throw new TRPCError({ code: "CONFLICT", message: "Doc was updated elsewhere" });
@@ -90,6 +108,26 @@ export const docRouter = router({
         const parsed = content !== undefined ? parseMarkdown(content) : {};
         const doc = await ctx.db.doc.update({ where: { id }, data: { ...rest, ...parsed } });
         return toDocResponse(doc);
+      }),
+    ),
+
+  // Optional expectedUpdatedAt (CONTEXT.md §5.1.17) protects against
+  // deleting a doc that was edited more recently than whoever clicked
+  // delete last saw it — same optimistic-lock shape as update. Doesn't
+  // catch every race (a delete that lands before the open editor's own
+  // first autosave isn't caught by any lock), which is what
+  // findDocOrNotFound's NOT_FOUND handling in update is for.
+  delete: scopedProcedure("doc", "write")
+    .input(z.object({ id: z.string(), expectedUpdatedAt: z.coerce.date().optional() }))
+    .mutation(async ({ ctx, input }) =>
+      runOrQueue(ctx, "doc.delete", input, async () => {
+        const existing = await findDocOrNotFound(ctx.db, input.id);
+        await assertProjectMember(ctx.db, existing.projectId, ctx.user.id);
+        if (input.expectedUpdatedAt && existing.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()) {
+          throw new TRPCError({ code: "CONFLICT", message: "Doc was updated elsewhere" });
+        }
+        await ctx.db.doc.delete({ where: { id: input.id } });
+        return { id: input.id };
       }),
     ),
 });
