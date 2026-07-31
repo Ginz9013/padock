@@ -164,7 +164,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     )}
                   </div>
                 )}
-                <main className="min-h-0 flex-1 overflow-y-auto px-6 py-8">{children}</main>
+                <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6">{children}</main>
               </div>
             </ResizablePanel>
             <ResizableHandle withHandle />
