@@ -3,19 +3,11 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { FileText, Plus } from "lucide-react";
+import { FileText, Plus, Trash2 } from "lucide-react";
 
 import { trpc, unwrapWrite } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 type Doc = { id: string; title: string; updatedAt: string };
 
@@ -35,16 +27,27 @@ export default function ProjectDocsPage() {
     void refresh();
   }, [projectId]);
 
-  async function create(title: string) {
-    const doc = unwrapWrite(await trpc.doc.create.mutate({ projectId, title, content: "" }));
+  // No title dialog (CONTEXT.md §5.1.17) — create a real "Untitled" doc
+  // immediately and go straight into the editor, matching how Notion/
+  // Google Docs/Confluence all handle "new document".
+  async function createDoc() {
+    const doc = unwrapWrite(await trpc.doc.create.mutate({ projectId, title: "Untitled", content: "" }));
     router.push(`/projects/${projectId}/docs/${doc.id}`);
+  }
+
+  async function removeDoc(doc: Doc) {
+    await trpc.doc.delete.mutate({ id: doc.id, expectedUpdatedAt: doc.updatedAt });
+    await refresh();
   }
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium text-muted-foreground">Docs</h2>
-        <NewDocDialog onCreate={create} />
+        <Button size="sm" onClick={() => void createDoc()}>
+          <Plus className="size-3.5" />
+          New doc
+        </Button>
       </div>
 
       {docs.length === 0 ? (
@@ -52,67 +55,33 @@ export default function ProjectDocsPage() {
       ) : (
         <ul className="flex flex-col gap-1">
           {docs.map((doc) => (
-            <li key={doc.id}>
-              <Link
-                href={`/projects/${projectId}/docs/${doc.id}`}
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
-              >
+            <li key={doc.id} className="group flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
+              <Link href={`/projects/${projectId}/docs/${doc.id}`} className="flex min-w-0 flex-1 items-center gap-2">
                 <FileText className="size-3.5 shrink-0 text-muted-foreground" />
                 <span className="truncate">{doc.title}</span>
                 <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                   {new Date(doc.updatedAt).toLocaleDateString()}
                 </span>
               </Link>
+              <ConfirmDialog
+                trigger={
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-6 shrink-0 opacity-0 group-hover:opacity-100"
+                    aria-label={`Delete ${doc.title}`}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                }
+                title={`Delete "${doc.title}"?`}
+                description="This can't be undone."
+                onConfirm={() => removeDoc(doc)}
+              />
             </li>
           ))}
         </ul>
       )}
     </div>
-  );
-}
-
-function NewDocDialog({ onCreate }: { onCreate: (title: string) => Promise<void> }) {
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function create() {
-    if (!title.trim()) return;
-    setBusy(true);
-    try {
-      await onCreate(title.trim());
-    } finally {
-      setBusy(false);
-      setOpen(false);
-      setTitle("");
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Plus className="size-3.5" />
-          New doc
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New doc</DialogTitle>
-        </DialogHeader>
-        <Input
-          placeholder="Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && create()}
-          autoFocus
-        />
-        <DialogFooter>
-          <Button onClick={create} disabled={busy || !title.trim()}>
-            Create
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
