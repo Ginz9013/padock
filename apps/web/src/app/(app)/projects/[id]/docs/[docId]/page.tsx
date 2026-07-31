@@ -149,7 +149,8 @@ export default function DocDetailPage() {
           setTitle(e.target.value);
           scheduleSave();
         }}
-        className="font-heading text-lg font-semibold"
+        placeholder="Untitled"
+        className="h-auto border-none bg-transparent px-0 py-0 font-heading text-4xl font-semibold focus-visible:ring-0 md:text-4xl"
       />
 
       <MarkdownEditorView
