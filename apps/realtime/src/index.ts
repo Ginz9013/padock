@@ -31,13 +31,20 @@ const httpServer = createServer((_req, res) => {
 
 const wss = new WebSocketServer({ noServer: true });
 
-// No per-channel/per-DM subscription filtering in v1 (§6/§7's "no
-// granular permissions yet" stance, extended to the push layer in
-// Phase 4): every connected, authenticated client gets every event.
-// A client's actual *read* scope is enforced at the query layer
-// (chat.history/conversation/search), not here — this is just a
-// "something changed, go re-fetch" signal.
+// Chat keeps its original no-per-channel/per-DM-filtering stance
+// (§6/§7, Phase 4): every connected, authenticated client gets every
+// chat event, and its actual *read* scope is enforced at the query
+// layer (chat.history/conversation/search), not here.
+//
+// Notifications (§5.1.19, ADR-0002) can't reuse that reasoning — a
+// notification's payload is inherently addressed to exactly one User,
+// so it's routed to that user's own connections only. `connections`
+// still holds every live socket (for broadcast); `connectionsByUser`
+// additionally indexes them by identity for targeted delivery — a
+// Set per user, not a single socket, since one user can have several
+// tabs/devices open at once.
 const connections = new Set<WebSocket>();
+const connectionsByUser = new Map<string, Set<WebSocket>>();
 
 httpServer.on("upgrade", (req, socket, head) => {
   void (async () => {
@@ -50,11 +57,23 @@ httpServer.on("upgrade", (req, socket, head) => {
     }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      console.log(`[realtime] connected: user=${identity.user.id}`);
+      const userId = identity.user.id;
+      console.log(`[realtime] connected: user=${userId}`);
       connections.add(ws);
+      let userSockets = connectionsByUser.get(userId);
+      if (!userSockets) {
+        userSockets = new Set();
+        connectionsByUser.set(userId, userSockets);
+      }
+      userSockets.add(ws);
+
       ws.on("close", () => {
         connections.delete(ws);
-        console.log(`[realtime] disconnected: user=${identity.user.id}`);
+        userSockets!.delete(ws);
+        if (userSockets!.size === 0) {
+          connectionsByUser.delete(userId);
+        }
+        console.log(`[realtime] disconnected: user=${userId}`);
       });
     });
   })();
@@ -74,9 +93,27 @@ redis.subscribe(PADOCK_EVENTS_CHANNEL, (err) => {
   console.log(`[realtime] subscribed to ${PADOCK_EVENTS_CHANNEL}`);
 });
 
+// Every realtime process instance subscribes to the same channel and
+// receives every event, then routes locally against whichever sockets
+// it happens to be holding — no cross-instance coordination needed
+// even if a user's two tabs land on different instances (§5.1.19).
 redis.on("message", (channel, message) => {
   console.log(`[realtime] redis message on ${channel}:`, message);
-  for (const ws of connections) {
+
+  let event: { recipientUserIds?: string[] | "broadcast" };
+  try {
+    event = JSON.parse(message) as typeof event;
+  } catch {
+    console.error(`[realtime] failed to parse event, dropping`, message);
+    return;
+  }
+
+  const targets: Iterable<WebSocket> =
+    event.recipientUserIds === "broadcast" || event.recipientUserIds === undefined
+      ? connections
+      : event.recipientUserIds.flatMap((userId) => [...(connectionsByUser.get(userId) ?? [])]);
+
+  for (const ws of targets) {
     if (ws.readyState === ws.OPEN) {
       ws.send(message);
     }

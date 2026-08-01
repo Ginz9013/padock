@@ -52,7 +52,7 @@ export const chatRouter = router({
                 },
               });
 
-        await publishEvent({ type: "chat.message", message });
+        await publishEvent({ type: "chat.message", recipientUserIds: "broadcast", payload: { message } });
         return message;
       }),
     ),

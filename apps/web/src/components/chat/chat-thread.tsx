@@ -100,7 +100,7 @@ export function ChatThread({
     useCallback(
       (event: RealtimeEvent) => {
         if (event.type !== "chat.message") return;
-        const message = event.message as IncomingChatMessage;
+        const message = event.payload.message as IncomingChatMessage;
         const matches =
           target.kind === "channel"
             ? message.channelId === target.channelId

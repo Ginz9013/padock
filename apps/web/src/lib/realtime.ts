@@ -1,13 +1,15 @@
 "use client";
 
 // One shared browser-wide connection to apps/realtime's WebSocket
-// gateway (CONTEXT.md §5.1's Redis pub/sub extraction seam). Every
-// connected client receives every event unfiltered — no per-channel/
-// per-DM server-side filtering by design (§5.1.4) — so consumers here
-// filter to whatever they individually care about. A module-level
-// singleton (not a per-component connection) keeps exactly one socket
-// open no matter how many components subscribe.
-export type RealtimeEvent = { type: string; [key: string]: unknown };
+// gateway (CONTEXT.md §5.1's Redis pub/sub extraction seam). Chat
+// events are still unfiltered broadcast — no per-channel/per-DM
+// server-side filtering (§5.1.4) — so chat consumers filter to
+// whatever they individually care about. Notification events
+// (§5.1.19, ADR-0002) are targeted server-side instead: if a socket
+// receives one at all, it's already meant for this user. A
+// module-level singleton (not a per-component connection) keeps
+// exactly one socket open no matter how many components subscribe.
+export type RealtimeEvent = { type: string; payload: Record<string, unknown> };
 type Listener = (event: RealtimeEvent) => void;
 
 let socket: WebSocket | null = null;
@@ -26,6 +28,13 @@ function connect() {
   const ws = new WebSocket(realtimeUrl());
   socket = ws;
 
+  ws.onopen = () => {
+    // Synthetic, not something the server sends — lets listeners (the
+    // notification badge, §5.1.19) refetch on every (re)connect rather
+    // than only on mount, since a push missed while disconnected is
+    // never resent (the DB row, not the socket, is the source of truth).
+    for (const listener of listeners) listener({ type: "__connected__", payload: {} });
+  };
   ws.onmessage = (event) => {
     let parsed: RealtimeEvent;
     try {
