@@ -15,27 +15,29 @@ datasource db {
 }
 
 model User {
-  id            String       @id
-  name          String
-  email         String
-  emailVerified Boolean      @default(false)
-  image         String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  members       Member[]
-  invitations   Invitation[]
-  createdTasks     Task[]
-  createdDocs      Doc[]
-  createdChannels  Channel[]
-  sentMessages     ChatMessage[] @relation("ChatMessageSender")
-  receivedMessages ChatMessage[] @relation("ChatMessageRecipient")
+  id                      String            @id
+  name                    String
+  email                   String
+  emailVerified           Boolean           @default(false)
+  image                   String?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  sessions                Session[]
+  accounts                Account[]
+  members                 Member[]
+  invitations             Invitation[]
+  createdTasks            Task[]
+  createdDocs             Doc[]
+  createdChannels         Channel[]
+  sentMessages            ChatMessage[]     @relation("ChatMessageSender")
+  receivedMessages        ChatMessage[]     @relation("ChatMessageRecipient")
   ownedApprovalRequests   ApprovalRequest[] @relation("ApprovalRequestOwner")
   decidedApprovalRequests ApprovalRequest[] @relation("ApprovalRequestDecider")
-  createdProjects    Project[]
-  projectMemberships ProjectMember[]
-  auditLogs          AuditLog[]
+  createdProjects         Project[]
+  projectMemberships      ProjectMember[]
+  auditLogs               AuditLog[]
+  notifications           Notification[]    @relation("NotificationRecipient")
+  triggeredNotifications  Notification[]    @relation("NotificationActor")
 
   @@unique([email])
   @@map("user")
@@ -170,22 +172,23 @@ model Apikey {
 // Cross-domain anchor per CONTEXT.md §5.1.2: tasks and docs (Phase 1)
 // will require a projectId; chat messages will tag it optionally.
 model Project {
-  id             String          @id @default(cuid())
-  organizationId String
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  createdById    String?
-  createdBy      User?           @relation(fields: [createdById], references: [id])
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  members        ProjectMember[]
-  tasks          Task[]
-  taskStates     TaskState[]
-  labels         Label[]
-  docs           Doc[]
-  chatMessages   ChatMessage[]
-  channels       Channel[]
+  id                      String                   @id @default(cuid())
+  organizationId          String
+  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                    String
+  createdById             String?
+  createdBy               User?                    @relation(fields: [createdById], references: [id])
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  members                 ProjectMember[]
+  tasks                   Task[]
+  taskStates              TaskState[]
+  labels                  Label[]
+  docs                    Doc[]
+  chatMessages            ChatMessage[]
+  channels                Channel[]
   docAttributeDefinitions DocAttributeDefinition[]
+  notifications           Notification[]
 
   @@index([organizationId])
   @@map("project")
@@ -232,15 +235,15 @@ enum TaskStateGroup {
 }
 
 model TaskState {
-  id          String         @id @default(cuid())
-  projectId   String
-  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name        String
-  group       TaskStateGroup
-  position    Int
-  isDefault   Boolean        @default(false)
-  createdAt   DateTime       @default(now())
-  tasks       Task[]
+  id        String         @id @default(cuid())
+  projectId String
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  group     TaskStateGroup
+  position  Int
+  isDefault Boolean        @default(false)
+  createdAt DateTime       @default(now())
+  tasks     Task[]
 
   @@unique([projectId, name])
   @@index([projectId])
@@ -258,22 +261,23 @@ enum TaskPriority {
 }
 
 model Task {
-  id          String         @id @default(cuid())
-  projectId   String
-  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title       String
-  description String?
-  stateId     String
-  state       TaskState      @relation(fields: [stateId], references: [id])
-  priority    TaskPriority   @default(none)
-  startDate   DateTime?
-  endDate     DateTime?
-  assignees   TaskAssignee[]
-  labels      TaskLabel[]
-  createdById String
-  createdBy   User           @relation(fields: [createdById], references: [id])
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id            String         @id @default(cuid())
+  projectId     String
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  stateId       String
+  state         TaskState      @relation(fields: [stateId], references: [id])
+  priority      TaskPriority   @default(none)
+  startDate     DateTime?
+  endDate       DateTime?
+  assignees     TaskAssignee[]
+  labels        TaskLabel[]
+  createdById   String
+  createdBy     User           @relation(fields: [createdById], references: [id])
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  notifications Notification[]
 
   @@index([projectId])
   @@index([stateId])
@@ -347,16 +351,16 @@ model TaskAssignee {
 // packages/api/src/router/doc.ts converts `blocks` back to Markdown
 // (`content`) on every read, preserving Phase 1's CLI/Skill contract.
 model Doc {
-  id          String   @id @default(cuid())
-  projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title       String
-  blocks      Json
-  searchText  String
-  createdById String
-  createdBy   User     @relation(fields: [createdById], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String              @id @default(cuid())
+  projectId       String
+  project         Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title           String
+  blocks          Json
+  searchText      String
+  createdById     String
+  createdBy       User                @relation(fields: [createdById], references: [id])
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
   attributeValues DocAttributeValue[]
 
   @@index([projectId])
@@ -378,13 +382,13 @@ enum DocAttributeType {
 }
 
 model DocAttributeDefinition {
-  id        String            @id @default(cuid())
+  id        String               @id @default(cuid())
   projectId String
-  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name      String
   type      DocAttributeType
   order     Int
-  createdAt DateTime          @default(now())
+  createdAt DateTime             @default(now())
   options   DocAttributeOption[]
   values    DocAttributeValue[]
 
@@ -397,9 +401,9 @@ model DocAttributeDefinition {
 // reusing Label, since overloading Label's meaning to double as generic
 // select-options would blur what a "label" is (§5.1.18).
 model DocAttributeOption {
-  id           String                  @id @default(cuid())
+  id           String                 @id @default(cuid())
   definitionId String
-  definition   DocAttributeDefinition  @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  definition   DocAttributeDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
   name         String
   color        String
   order        Int
@@ -415,18 +419,18 @@ model DocAttributeOption {
 // written when a value is actually set — a doc with nothing filled in for
 // a given attribute simply has no row, no backfill on new definitions.
 model DocAttributeValue {
-  id             String                  @id @default(cuid())
+  id             String                 @id @default(cuid())
   docId          String
-  doc            Doc                     @relation(fields: [docId], references: [id], onDelete: Cascade)
+  doc            Doc                    @relation(fields: [docId], references: [id], onDelete: Cascade)
   definitionId   String
-  definition     DocAttributeDefinition  @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  definition     DocAttributeDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
   valueText      String?
   valueNumber    Float?
   valueDate      DateTime?
   valueBoolean   Boolean?
   selectOptionId String?
-  selectOption   DocAttributeOption?     @relation(fields: [selectOptionId], references: [id], onDelete: Cascade)
-  updatedAt      DateTime                @updatedAt
+  selectOption   DocAttributeOption?    @relation(fields: [selectOptionId], references: [id], onDelete: Cascade)
+  updatedAt      DateTime               @updatedAt
 
   @@unique([docId, definitionId])
   @@index([docId])
@@ -448,14 +452,14 @@ model DocAttributeValue {
 // v1: every org member can see every channel (§6/§7's "no granular
 // permissions yet" stance).
 model Channel {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   title       String
   projectId   String?
-  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  isDefault   Boolean  @default(false)
+  project     Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  isDefault   Boolean       @default(false)
   createdById String
-  createdBy   User     @relation(fields: [createdById], references: [id])
-  createdAt   DateTime @default(now())
+  createdBy   User          @relation(fields: [createdById], references: [id])
+  createdAt   DateTime      @default(now())
   messages    ChatMessage[]
 
   @@index([projectId])
@@ -466,17 +470,18 @@ model Channel {
 // (channelId set) — never both. Enforced in the tRPC router, not the
 // schema (Prisma has no cross-column CHECK constraint DSL).
 model ChatMessage {
-  id          String   @id @default(cuid())
-  senderId    String
-  sender      User     @relation("ChatMessageSender", fields: [senderId], references: [id])
-  recipientId String?
-  recipient   User?    @relation("ChatMessageRecipient", fields: [recipientId], references: [id])
-  channelId   String?
-  channel     Channel? @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  projectId   String?
-  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  content     String
-  createdAt   DateTime @default(now())
+  id            String         @id @default(cuid())
+  senderId      String
+  sender        User           @relation("ChatMessageSender", fields: [senderId], references: [id])
+  recipientId   String?
+  recipient     User?          @relation("ChatMessageRecipient", fields: [recipientId], references: [id])
+  channelId     String?
+  channel       Channel?       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  projectId     String?
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  content       String
+  createdAt     DateTime       @default(now())
+  notifications Notification[]
 
   @@index([senderId])
   @@index([recipientId])
@@ -544,4 +549,44 @@ model AuditLog {
   @@index([path])
   @@index([createdAt])
   @@map("audit_log")
+}
+
+// Cross-domain notification system (CONTEXT.md §5.1.19, ADR-0002).
+// Recipient is always a User, never a PAT/agent identity — an agent
+// acts on a User's behalf and already has its own pull mechanism
+// (padock approvals status/list), it isn't an addressable inbox
+// owner. `actorId` (who triggered it) is a separate axis from
+// `userId` (who receives it).
+enum NotificationType {
+  task_assigned
+  project_member_added
+  chat_dm
+}
+
+// Nullable FK per trigger type, not a generic entityType/entityId —
+// same DocAttributeValue precedent (§5.1.18): real Postgres FKs +
+// cascade delete instead of a polymorphic reference validated only in
+// the API layer. Cost: every future trigger type needs its own new
+// nullable FK column and a migration (accepted, matches this
+// project's prisma-migrate-first workflow, §5.1.6).
+model Notification {
+  id            String           @id @default(cuid())
+  userId        String
+  user          User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  type          NotificationType
+  taskId        String?
+  task          Task?            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  projectId     String?
+  project       Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chatMessageId String?
+  chatMessage   ChatMessage?     @relation(fields: [chatMessageId], references: [id], onDelete: Cascade)
+  actorId       String?
+  actor         User?            @relation("NotificationActor", fields: [actorId], references: [id])
+  isRead        Boolean          @default(false)
+  readAt        DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, isRead])
+  @@map("notification")
 }
