@@ -1,0 +1,14 @@
+# Targeted per-user WebSocket delivery for notifications
+
+`apps/realtime`'s WebSocket gateway broadcasts every chat event to every connected authenticated socket (§5.1.4) — accepted for chat because a client's actual read access is enforced at the query layer (`chat.history`/`conversation`), not the push layer, and every org member has some plausible relationship to org-wide channel content. The planned cross-domain notification system (§5.1.19) doesn't fit that reasoning: a `Notification` is inherently addressed to exactly one `User`, so broadcasting one (task assignment, project invite, DM) to every connected socket would leak project/task/colleague names into every other logged-in user's browser memory regardless of whether the UI chooses to render it — there is no "everyone has some access" argument to fall back on the way there is for org-wide chat.
+
+**Decision**: `apps/realtime` adds a `userId → Set<WebSocket>` connection registry (identity is already resolved per-connection via `resolveIdentity`, previously discarded after the initial log line). `packages/api`'s `publishEvent` envelope becomes `{ type, recipientUserIds: string[] | "broadcast", payload }`. The realtime gateway routes to the matching user(s)' sockets when given an array, or broadcasts unfiltered when given `"broadcast"`. Chat's existing `publishEvent` calls keep passing `"broadcast"` — zero behavior change there. Recipient resolution (who should receive a given event) stays in `packages/api`, where the domain logic and DB access already live, not in `apps/realtime`, preserving §5.1's "no business logic in the realtime process" boundary.
+
+## Considered options
+
+- **Keep the existing broadcast-and-client-filter model for notifications too**, for consistency with chat. Rejected: unlike chat, a notification's recipient set is always exactly the one user the event names — broadcasting it maximizes exposure of that user's specific activity to every other connected session for no benefit.
+- **Generic `entityType`/`entityId` on `Notification`** instead of a nullable FK per trigger type. Rejected for the same reason §5.1.18 rejected it for `DocAttributeValue`: loses real Postgres referential integrity (cascade cleanup when the referenced `Task`/`Project`/`ChatMessage` is deleted), pushing that consistency into hand-written API-layer cleanup instead.
+
+## Consequences
+
+`apps/realtime` moves from a purely stateless per-message broadcaster to holding a live connection index keyed by user — still no business logic (the routing decision is made by the caller via `recipientUserIds`), but the process is no longer trivially stateless. If chat is ever migrated to targeted delivery later, it's additive — resolve a recipient list instead of passing `"broadcast"` — not a rewrite of `apps/realtime`'s delivery mechanism, since the envelope and registry already support both modes.
