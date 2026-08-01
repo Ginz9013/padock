@@ -4,7 +4,7 @@ import { publishEvent } from "./redis.ts";
 // Mirrors the NotificationType enum's values (schema.prisma) as a plain
 // string union — same "zod/local literal union, not an imported Prisma
 // enum type" convention task.ts's priorityEnum already uses.
-export type NotificationType = "task_assigned" | "project_member_added" | "chat_dm";
+export type NotificationType = "task_assigned" | "project_member_added" | "chat_dm" | "chat_mention";
 
 /**
  * Cross-domain notification system (CONTEXT.md §5.1.19, ADR-0002).

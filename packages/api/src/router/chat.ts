@@ -4,6 +4,7 @@ import { publishEvent } from "../redis.ts";
 import { runOrQueue } from "../approvalGate.ts";
 import { assertProjectMember } from "../projectAccess.ts";
 import { notify } from "../notify.ts";
+import { parseMentions } from "../mentions.ts";
 
 // DM (recipientId) or channel message (channelId) — never both.
 // §5.1.3/Phase 4, single-level channel per ADR-0001. `projectId` is an
@@ -62,6 +63,57 @@ export const chatRouter = router({
             chatMessageId: message.id,
             actorId: ctx.user.id,
           });
+        }
+
+        // @user/#task/#doc mentions (CONTEXT.md §5.1.20) — applies to
+        // both DM and channel messages, unlike chat_dm above which is
+        // DM-only. ChatMention rows are the queryable "who/what was
+        // mentioned" source (notify() fan-out here, and mention.resolve's
+        // read-time rendering); content itself only carries the raw
+        // tokens for display reconstruction.
+        const tokens = parseMentions(input.content);
+        if (tokens.length > 0) {
+          const byType = {
+            user: tokens.filter((t) => t.type === "user").map((t) => t.id),
+            task: tokens.filter((t) => t.type === "task").map((t) => t.id),
+            doc: tokens.filter((t) => t.type === "doc").map((t) => t.id),
+          };
+          // Existence-validate before writing ChatMention/calling
+          // notify() — an unvalidated stale/forged token would
+          // otherwise hit notify()'s real FK on Notification.userId
+          // and fail the whole send, not just skip the mention.
+          const [validUsers, validTasks, validDocs] = await Promise.all([
+            byType.user.length
+              ? ctx.db.user.findMany({ where: { id: { in: byType.user } }, select: { id: true } })
+              : [],
+            byType.task.length
+              ? ctx.db.task.findMany({ where: { id: { in: byType.task } }, select: { id: true } })
+              : [],
+            byType.doc.length
+              ? ctx.db.doc.findMany({ where: { id: { in: byType.doc } }, select: { id: true } })
+              : [],
+          ]);
+          const validIds = {
+            user: new Set(validUsers.map((u) => u.id)),
+            task: new Set(validTasks.map((t) => t.id)),
+            doc: new Set(validDocs.map((d) => d.id)),
+          };
+          const validTokens = tokens.filter((t) => validIds[t.type].has(t.id));
+
+          if (validTokens.length > 0) {
+            await ctx.db.chatMention.createMany({
+              data: validTokens.map((t) => ({ chatMessageId: message.id, targetType: t.type, targetId: t.id })),
+            });
+          }
+          for (const t of validTokens) {
+            if (t.type !== "user") continue; // #task/#doc never notify — link-only (§5.1.20)
+            await notify(ctx.db, {
+              userId: t.id,
+              type: "chat_mention",
+              chatMessageId: message.id,
+              actorId: ctx.user.id,
+            });
+          }
         }
 
         return message;

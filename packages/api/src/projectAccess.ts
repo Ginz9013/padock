@@ -32,3 +32,12 @@ export async function assertKeepsAnAdmin(db: PrismaClient, projectId: string) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Can't remove the project's last admin" });
   }
 }
+
+// "Which projects can this user see" as a reusable primitive (§5.1.20)
+// — previously only inlined once, in project.list's own where-clause.
+// Used by mention.search's no-project-anchor fallback and
+// mention.resolve's read-time permission filtering.
+export async function listMemberProjectIds(db: PrismaClient, userId: string): Promise<string[]> {
+  const rows = await db.projectMember.findMany({ where: { userId }, select: { projectId: true } });
+  return rows.map((r) => r.projectId);
+}
