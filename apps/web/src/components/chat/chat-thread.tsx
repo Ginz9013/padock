@@ -1,16 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Avatar } from "@/components/ui/avatar";
 import { useSession } from "@/lib/auth-client";
 import { useRealtimeEvent } from "@/lib/use-realtime";
 import type { RealtimeEvent } from "@/lib/realtime";
 import type { UserProfile } from "@/lib/use-user-profiles";
+import { segmentContent, mightContainMention } from "@/lib/mention-tokens";
+import ChatComposer from "./chat-composer-lazy";
 
 type ChatMessage = {
   id: string;
@@ -22,6 +23,18 @@ type ChatMessage = {
 type IncomingChatMessage = ChatMessage & {
   recipientId: string | null;
   channelId: string | null;
+};
+
+// mention.resolve's per-viewer-filtered output (CONTEXT.md §5.1.20) —
+// title/projectId are null when restricted (viewer isn't a member of
+// the mentioned task/doc's project) or when the target no longer exists.
+type ResolvedMention = {
+  chatMessageId: string;
+  targetType: "user" | "task" | "doc";
+  targetId: string;
+  title: string | null;
+  projectId: string | null;
+  restricted: boolean;
 };
 
 type Target = { kind: "channel"; channelId: string } | { kind: "dm"; withUserId: string };
@@ -57,20 +70,17 @@ export function ChatThread({
 }) {
   const { data: session } = useSession();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
+  // Keyed by chatMessageId — populated by mention.resolve, whose
+  // per-viewer permission filtering (§5.1.20) is why this can't ride
+  // along in chat.history/conversation's own response or the realtime
+  // broadcast payload: the same message can resolve differently for
+  // different readers.
+  const [mentionResolutions, setMentionResolutions] = useState<Map<string, ResolvedMention[]>>(new Map());
   const bottomRef = useRef<HTMLDivElement>(null);
-  // Defaults to the Windows/Linux label for a stable SSR render, then
-  // flips to the Mac symbol post-mount once `navigator` is available.
-  const [sendShortcutLabel, setSendShortcutLabel] = useState("Ctrl");
-  useEffect(() => {
-    if (/Mac|iPhone|iPad/.test(navigator.platform)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSendShortcutLabel("⌘");
-    }
-  }, []);
 
   const targetKey = target.kind === "channel" ? target.channelId : target.withUserId;
+  const conversationContext =
+    target.kind === "channel" ? { channelId: target.channelId } : { recipientId: target.withUserId, projectId };
 
   async function refresh() {
     const rows =
@@ -78,6 +88,20 @@ export function ChatThread({
         ? await trpc.chat.history.query({ channelId: target.channelId })
         : await trpc.chat.conversation.query({ withUserId: target.withUserId });
     setMessages(rows);
+
+    const candidateIds = rows.filter((r) => mightContainMention(r.content)).map((r) => r.id);
+    if (candidateIds.length === 0) {
+      setMentionResolutions(new Map());
+      return;
+    }
+    const resolved = await trpc.mention.resolve.query({ messageIds: candidateIds });
+    const byMessage = new Map<string, ResolvedMention[]>();
+    for (const r of resolved) {
+      const existing = byMessage.get(r.chatMessageId);
+      if (existing) existing.push(r);
+      else byMessage.set(r.chatMessageId, [r]);
+    }
+    setMentionResolutions(byMessage);
   }
 
   useEffect(() => {
@@ -94,7 +118,7 @@ export function ChatThread({
   // for the next manual refresh (CONTEXT.md §5.1.4's ws+Redis seam —
   // the push is "something changed, go re-fetch/append", scoped here
   // to whichever target this thread instance is showing). Dedupe by
-  // id since our own `send()` already appends via its own refresh().
+  // id since our own `handleSend()` already appends via its own refresh().
   const meId = session?.user?.id;
   useRealtimeEvent(
     useCallback(
@@ -109,27 +133,72 @@ export function ChatThread({
                 (message.senderId === target.withUserId && message.recipientId === meId));
         if (!matches) return;
         setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
+
+        // Resolution is per-viewer (§5.1.20's read-time permission
+        // filtering), so it can't ride along in this broadcast payload —
+        // every client resolves for itself after receipt. Chips render
+        // as raw tokens for a beat until this lands; expected, not a bug.
+        if (mightContainMention(message.content)) {
+          void trpc.mention.resolve.query({ messageIds: [message.id] }).then((resolved) => {
+            if (resolved.length === 0) return;
+            setMentionResolutions((prev) => new Map(prev).set(message.id, resolved));
+          });
+        }
       },
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [targetKey, meId],
     ),
   );
 
-  async function send() {
-    const content = draft.trim();
-    if (!content) return;
-    setSending(true);
-    try {
-      if (target.kind === "channel") {
-        await trpc.chat.send.mutate({ channelId: target.channelId, content });
-      } else {
-        await trpc.chat.send.mutate({ recipientId: target.withUserId, content, projectId });
+  function renderMessageContent(message: ChatMessage) {
+    const resolutions = mentionResolutions.get(message.id) ?? [];
+    return segmentContent(message.content).map((segment, i) => {
+      if (segment.kind === "text") return <span key={i}>{segment.text}</span>;
+      const { token } = segment;
+      const resolution = resolutions.find((r) => r.targetType === token.type && r.targetId === token.id);
+
+      if (token.type === "user") {
+        return (
+          <span key={i} className="rounded bg-primary/10 px-1 py-0.5 text-primary">
+            @{resolution?.title ?? token.id}
+          </span>
+        );
       }
-      setDraft("");
-      await refresh();
-    } finally {
-      setSending(false);
+      if (resolution?.restricted) {
+        return (
+          <span key={i} className="rounded bg-muted px-1 py-0.5 text-muted-foreground">
+            Restricted {token.type}
+          </span>
+        );
+      }
+      if (resolution?.title && resolution.projectId) {
+        const href =
+          token.type === "task"
+            ? `/projects/${resolution.projectId}?taskId=${token.id}`
+            : `/projects/${resolution.projectId}/docs/${token.id}`;
+        return (
+          <Link key={i} href={href} className="rounded bg-muted px-1 py-0.5 text-foreground/80 hover:underline">
+            #{resolution.title}
+          </Link>
+        );
+      }
+      // Not yet resolved (realtime beat before mention.resolve returns),
+      // or resolved but the target no longer exists.
+      return (
+        <span key={i} className="rounded bg-muted px-1 py-0.5 text-muted-foreground">
+          #{token.id}
+        </span>
+      );
+    });
+  }
+
+  async function handleSend(content: string) {
+    if (target.kind === "channel") {
+      await trpc.chat.send.mutate({ channelId: target.channelId, content });
+    } else {
+      await trpc.chat.send.mutate({ recipientId: target.withUserId, content, projectId });
     }
+    await refresh();
   }
 
   return (
@@ -172,7 +241,7 @@ export function ChatThread({
                       <span className="text-xs text-muted-foreground">{time}</span>
                     </div>
                   )}
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  <p className="text-sm whitespace-pre-wrap">{renderMessageContent(message)}</p>
                 </div>
               </div>
             );
@@ -183,26 +252,7 @@ export function ChatThread({
           <div ref={bottomRef} />
         </div>
       </div>
-      <div className="flex items-end gap-2 border-t px-3 pt-3 pb-2">
-        <Textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            // Ctrl+Enter on Windows/Linux, Cmd+Enter on Mac.
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          onFocus={onFocusInput}
-          placeholder={`Write a message… (${sendShortcutLabel}+Enter to send)`}
-          className="min-h-9 flex-1 resize-none rounded-lg border-none bg-muted px-2.5 py-2 shadow-none focus-visible:ring-0"
-          rows={1}
-        />
-        <Button onClick={send} disabled={sending || !draft.trim()}>
-          Send
-        </Button>
-      </div>
+      <ChatComposer context={conversationContext} onSend={handleSend} onFocus={onFocusInput} />
     </div>
   );
 }
