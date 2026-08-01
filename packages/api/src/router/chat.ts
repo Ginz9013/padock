@@ -3,6 +3,7 @@ import { scopedProcedure, router } from "../trpc.ts";
 import { publishEvent } from "../redis.ts";
 import { runOrQueue } from "../approvalGate.ts";
 import { assertProjectMember } from "../projectAccess.ts";
+import { notify } from "../notify.ts";
 
 // DM (recipientId) or channel message (channelId) — never both.
 // §5.1.3/Phase 4, single-level channel per ADR-0001. `projectId` is an
@@ -53,6 +54,16 @@ export const chatRouter = router({
               });
 
         await publishEvent({ type: "chat.message", recipientUserIds: "broadcast", payload: { message } });
+
+        if ("recipientId" in input) {
+          await notify(ctx.db, {
+            userId: input.recipientId,
+            type: "chat_dm",
+            chatMessageId: message.id,
+            actorId: ctx.user.id,
+          });
+        }
+
         return message;
       }),
     ),

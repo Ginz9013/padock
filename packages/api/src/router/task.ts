@@ -4,6 +4,7 @@ import type { PrismaClient } from "@padock/db";
 import { scopedProcedure, router } from "../trpc.ts";
 import { runOrQueue } from "../approvalGate.ts";
 import { assertProjectMember } from "../projectAccess.ts";
+import { notify } from "../notify.ts";
 
 const taskAssigneeInclude = {
   assignees: { include: { projectMember: { include: { user: true } } } },
@@ -76,7 +77,7 @@ export const taskRouter = router({
         }
         const memberIds = await resolveAssigneeMemberIds(ctx.db, input.projectId, input.assigneeUserIds ?? []);
         const labelIds = await resolveLabelIds(ctx.db, input.projectId, input.labelIds ?? []);
-        return ctx.db.task.create({
+        const task = await ctx.db.task.create({
           data: {
             projectId: input.projectId,
             title: input.title,
@@ -91,6 +92,20 @@ export const taskRouter = router({
           },
           include: taskAssigneeInclude,
         });
+
+        await Promise.all(
+          task.assignees.map((assignee) =>
+            notify(ctx.db, {
+              userId: assignee.projectMember.userId,
+              type: "task_assigned",
+              taskId: task.id,
+              projectId: task.projectId,
+              actorId: ctx.user.id,
+            }),
+          ),
+        );
+
+        return task;
       }),
     ),
 
@@ -201,13 +216,42 @@ export const taskRouter = router({
     .input(z.object({ id: z.string(), assigneeUserIds: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) =>
       runOrQueue(ctx, "task.updateAssignees", input, async () => {
-        const task = await ctx.db.task.findUniqueOrThrow({ where: { id: input.id } });
+        const task = await ctx.db.task.findUniqueOrThrow({
+          where: { id: input.id },
+          include: { assignees: true },
+        });
         await assertProjectMember(ctx.db, task.projectId, ctx.user.id);
         const memberIds = await resolveAssigneeMemberIds(ctx.db, task.projectId, input.assigneeUserIds);
+
+        // Only newly-added assignees get notified — re-saving an
+        // unchanged assignee list (a full delete+recreate below,
+        // not a diff) shouldn't re-notify someone who was already
+        // assigned before this call.
+        const previousMemberIds = new Set(task.assignees.map((a) => a.projectMemberId));
+        const newMemberIds = memberIds.filter((id) => !previousMemberIds.has(id));
+
         await ctx.db.taskAssignee.deleteMany({ where: { taskId: input.id } });
         await ctx.db.taskAssignee.createMany({
           data: memberIds.map((projectMemberId) => ({ taskId: input.id, projectMemberId })),
         });
+
+        if (newMemberIds.length > 0) {
+          const newMembers = await ctx.db.projectMember.findMany({
+            where: { id: { in: newMemberIds } },
+          });
+          await Promise.all(
+            newMembers.map((member) =>
+              notify(ctx.db, {
+                userId: member.userId,
+                type: "task_assigned",
+                taskId: input.id,
+                projectId: task.projectId,
+                actorId: ctx.user.id,
+              }),
+            ),
+          );
+        }
+
         return ctx.db.task.findUniqueOrThrow({
           where: { id: input.id },
           include: taskAssigneeInclude,

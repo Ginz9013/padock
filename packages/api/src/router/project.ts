@@ -3,6 +3,7 @@ import { z } from "zod";
 import { scopedProcedure, router } from "../trpc.ts";
 import { runOrQueue } from "../approvalGate.ts";
 import { assertKeepsAnAdmin, assertProjectAdmin, assertProjectMember } from "../projectAccess.ts";
+import { notify } from "../notify.ts";
 
 // Plane-style default workflow (CONTEXT.md §5.1.5) — seeded on every
 // new project so it's immediately usable, not stuck with zero valid
@@ -100,11 +101,25 @@ export const projectRouter = router({
         if (existing?.role === "admin" && input.role === "member") {
           await assertKeepsAnAdmin(ctx.db, input.projectId);
         }
-        return ctx.db.projectMember.upsert({
+        const member = await ctx.db.projectMember.upsert({
           where: { projectId_userId: { projectId: input.projectId, userId: input.userId } },
           create: { projectId: input.projectId, userId: input.userId, role: input.role },
           update: { role: input.role },
         });
+
+        // Only a brand-new membership is "you were added" — role
+        // changes on an existing member go through this same upsert
+        // but shouldn't re-notify someone who's already a member.
+        if (!existing) {
+          await notify(ctx.db, {
+            userId: input.userId,
+            type: "project_member_added",
+            projectId: input.projectId,
+            actorId: ctx.user.id,
+          });
+        }
+
+        return member;
       }),
     ),
 
