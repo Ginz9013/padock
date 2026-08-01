@@ -9,7 +9,7 @@ const notificationInclude = {
   actor: { select: { id: true, name: true, email: true } },
   task: { select: { id: true, title: true } },
   project: { select: { id: true, name: true } },
-  chatMessage: { select: { id: true, content: true } },
+  chatMessage: { select: { id: true, content: true, channelId: true } },
 } as const;
 
 // First real cursor-paginated query in this codebase (§5.1.19) — every

@@ -3,7 +3,7 @@
 // ApprovalRequest type already uses (apps/web/src/app/(app)/approvals/page.tsx).
 export type NotificationItem = {
   id: string;
-  type: "task_assigned" | "project_member_added" | "chat_dm";
+  type: "task_assigned" | "project_member_added" | "chat_dm" | "chat_mention";
   isRead: boolean;
   createdAt: string;
   taskId: string | null;
@@ -11,7 +11,7 @@ export type NotificationItem = {
   actor: { id: string; name: string; email: string } | null;
   task: { id: string; title: string } | null;
   project: { id: string; name: string } | null;
-  chatMessage: { id: string; content: string } | null;
+  chatMessage: { id: string; content: string; channelId: string | null } | null;
 };
 
 export function describeNotification(n: NotificationItem): string {
@@ -23,6 +23,8 @@ export function describeNotification(n: NotificationItem): string {
       return `${actorName} added you to "${n.project?.name ?? "a project"}"`;
     case "chat_dm":
       return `${actorName} sent you a message`;
+    case "chat_mention":
+      return `${actorName} mentioned you`;
   }
 }
 
@@ -33,7 +35,10 @@ export function describeNotification(n: NotificationItem): string {
 // chat/[userId]/page.tsx) — the notification's `actor` is always the
 // message's sender (chat.ts sets actorId to the sender when notifying
 // the recipient), which is exactly the DM counterpart this recipient
-// wants to land on.
+// wants to land on. chat_mention follows the same actor-is-the-author
+// rule (chat.ts's mention fan-out uses actorId: ctx.user.id too, same as
+// chat_dm) — it can originate from either a DM or a channel message, so
+// it branches on chatMessage.channelId first to link to the right one.
 export function notificationHref(n: NotificationItem): string | null {
   switch (n.type) {
     case "task_assigned":
@@ -42,5 +47,11 @@ export function notificationHref(n: NotificationItem): string | null {
       return n.projectId ? `/projects/${n.projectId}/overview` : null;
     case "chat_dm":
       return n.actor ? `/chat/${n.actor.id}` : null;
+    case "chat_mention":
+      return n.chatMessage?.channelId
+        ? `/chat/channel/${n.chatMessage.channelId}`
+        : n.actor
+          ? `/chat/${n.actor.id}`
+          : null;
   }
 }

@@ -13,6 +13,7 @@ import { apikeyRouter } from "./router/apikey.ts";
 import { approvalRouter } from "./router/approval.ts";
 import { auditLogRouter } from "./router/auditLog.ts";
 import { notificationRouter } from "./router/notification.ts";
+import { mentionRouter } from "./router/mention.ts";
 
 export const appRouter = router({
   health: publicProcedure.query(async ({ ctx }) => {
@@ -36,6 +37,7 @@ export const appRouter = router({
   approval: approvalRouter,
   auditLog: auditLogRouter,
   notification: notificationRouter,
+  mention: mentionRouter,
 });
 
 export type AppRouter = typeof appRouter;

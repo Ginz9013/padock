@@ -482,12 +482,38 @@ model ChatMessage {
   content       String
   createdAt     DateTime       @default(now())
   notifications Notification[]
+  mentions      ChatMention[]
 
   @@index([senderId])
   @@index([recipientId])
   @@index([projectId])
   @@index([channelId])
   @@map("chat_message")
+}
+
+enum MentionTargetType {
+  user
+  task
+  doc
+}
+
+// Queryable "who/what was mentioned" per message (§5.1.20) — separate
+// from ChatMessage.content, which stores the same info only as inline
+// @[user:id]/#[task:id]/#[doc:id] tokens for display reconstruction.
+// targetId has no FK — the target table varies by targetType and
+// Prisma has no polymorphic FK; existence is validated at write time
+// in chat.ts's send resolver instead.
+model ChatMention {
+  id            String            @id @default(cuid())
+  chatMessageId String
+  chatMessage   ChatMessage       @relation(fields: [chatMessageId], references: [id], onDelete: Cascade)
+  targetType    MentionTargetType
+  targetId      String
+  createdAt     DateTime          @default(now())
+
+  @@index([chatMessageId])
+  @@index([targetType, targetId])
+  @@map("chat_mention")
 }
 
 enum ApprovalStatus {
@@ -561,6 +587,7 @@ enum NotificationType {
   task_assigned
   project_member_added
   chat_dm
+  chat_mention
 }
 
 // Nullable FK per trigger type, not a generic entityType/entityId —
