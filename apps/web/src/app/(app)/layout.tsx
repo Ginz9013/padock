@@ -13,6 +13,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { AppSidebar } from "@/components/app-sidebar";
 import { ChatSidebarProvider } from "@/components/chat/chat-sidebar-provider";
 import { ChatRightSidebar } from "@/components/chat/chat-right-sidebar";
+import { NotificationBell } from "@/components/notification-bell";
 
 type Project = { id: string; name: string };
 
@@ -107,6 +108,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             Padock
           </Link>
           <div className="flex items-center gap-3">
+            <NotificationBell />
             {session?.user && (
               <span className="text-sm text-muted-foreground">{session.user.email}</span>
             )}
