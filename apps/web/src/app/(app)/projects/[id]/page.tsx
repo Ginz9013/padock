@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 
 import { trpc } from "@/lib/trpc";
@@ -60,6 +60,7 @@ export default function ProjectTaskPage() {
   const [members, setMembers] = useState<ProjectMemberSummary[]>([]);
   const [labels, setLabels] = useState<ProjectLabel[]>([]);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  const taskIdParam = searchParams.get("taskId");
 
   async function refresh() {
     const [stateList, taskList, memberList, labelList] = await Promise.all([
@@ -78,6 +79,29 @@ export default function ProjectTaskPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [projectId]);
+
+  // ?taskId= deep link (from a notification — apps/web/src/lib/
+  // notification-display.ts), same query-param pattern as ?view=.
+  // Consumed once, not re-applied on every render, so closing the
+  // modal afterward doesn't immediately reopen it while the param is
+  // still being stripped from the URL (closeTaskModal below).
+  const consumedTaskIdParam = useRef(false);
+  useEffect(() => {
+    if (taskIdParam && !consumedTaskIdParam.current && tasks.some((t) => t.id === taskIdParam)) {
+      consumedTaskIdParam.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOpenTaskId(taskIdParam);
+    }
+  }, [taskIdParam, tasks]);
+
+  function closeTaskModal() {
+    setOpenTaskId(null);
+    if (searchParams.get("taskId")) {
+      const params = new URLSearchParams(searchParams);
+      params.delete("taskId");
+      router.replace(params.size > 0 ? `?${params.toString()}` : "?");
+    }
+  }
 
   async function changeState(taskId: string, stateId: string) {
     await trpc.task.updateState.mutate({ id: taskId, stateId });
@@ -137,7 +161,7 @@ export default function ProjectTaskPage() {
         states={states}
         members={members}
         labels={labels}
-        onClose={() => setOpenTaskId(null)}
+        onClose={closeTaskModal}
         onChanged={refresh}
       />
     </div>

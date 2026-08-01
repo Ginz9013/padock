@@ -26,17 +26,21 @@ export function describeNotification(n: NotificationItem): string {
   }
 }
 
-// Best available navigation target — none of these are true deep links
-// to the exact task/message (the web UI has no per-task URL, tasks open
-// via a modal triggered from within the project page), just the closest
-// page that gets a user to the right context.
+// task_assigned uses a real deep link — the project task page reads
+// ?taskId= and auto-opens the Task Detail Modal (apps/web/src/app/(app)/
+// projects/[id]/page.tsx), the same query-param pattern it already uses
+// for ?view=. chat_dm links to /chat/[userId] (apps/web/src/app/(app)/
+// chat/[userId]/page.tsx) — the notification's `actor` is always the
+// message's sender (chat.ts sets actorId to the sender when notifying
+// the recipient), which is exactly the DM counterpart this recipient
+// wants to land on.
 export function notificationHref(n: NotificationItem): string | null {
   switch (n.type) {
     case "task_assigned":
-      return n.projectId ? `/projects/${n.projectId}` : null;
+      return n.projectId && n.taskId ? `/projects/${n.projectId}?taskId=${n.taskId}` : null;
     case "project_member_added":
       return n.projectId ? `/projects/${n.projectId}/overview` : null;
     case "chat_dm":
-      return "/dashboard";
+      return n.actor ? `/chat/${n.actor.id}` : null;
   }
 }
