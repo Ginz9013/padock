@@ -34,9 +34,9 @@ type Project = { id: string; name: string };
 
 // Each project's sub-nav (Plane's per-project sidebar tree is the
 // reference): Tasks is the project root route, the rest are nested
-// segments. Modules and Channels don't have real pages yet — this is
-// sidebar scaffolding ahead of those features, same as Docs was before
-// it had content.
+// segments. Modules doesn't have a real page yet — this is sidebar
+// scaffolding ahead of that feature, same as Docs and Channels were
+// before they had content (Channels: CONTEXT.md §5.1.21).
 const PROJECT_SUB_NAV = [
   { label: "Tasks", segment: "", icon: ListChecks },
   { label: "Modules", segment: "modules", icon: Layers },
