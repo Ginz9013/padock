@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Star } from "lucide-react";
+import { ChevronRight, Star } from "lucide-react";
 
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/lib/auth-client";
@@ -53,15 +53,17 @@ export default function BookmarksPage() {
     await trpc.bookmark.remove.mutate({ chatMessageId });
   }
 
+  // ?messageId= deep link — ChatThread scrolls to and briefly highlights
+  // this message instead of landing at the conversation's default scroll
+  // position (bottom), same query-param pattern as the Project page's
+  // ?taskId= deep link.
   function hrefFor(item: Bookmark): string {
-    if (item.channelId) {
-      return item.projectId
+    const base = item.channelId
+      ? item.projectId
         ? `/projects/${item.projectId}/channels/${item.channelId}`
-        : `/chat/channel/${item.channelId}`;
-    }
-    const meId = session?.user?.id;
-    const counterpartId = item.senderId === meId ? item.recipientId : item.senderId;
-    return `/chat/${counterpartId}`;
+        : `/chat/channel/${item.channelId}`
+      : `/chat/${item.senderId === session?.user?.id ? item.recipientId : item.senderId}`;
+    return `${base}?messageId=${encodeURIComponent(item.chatMessageId)}`;
   }
 
   return (
@@ -78,18 +80,21 @@ export default function BookmarksPage() {
           {items.map((item) => {
             const senderName = profiles.get(item.senderId)?.name ?? item.senderId;
             return (
-              <li key={item.chatMessageId} className="flex items-start gap-2 px-4 py-3 text-sm hover:bg-muted">
-                <Link href={hrefFor(item)} className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-medium">{senderName}</span>
-                    {item.channelTitle && (
-                      <span className="text-xs text-muted-foreground">in #{item.channelTitle}</span>
-                    )}
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(item.createdAt).toLocaleString()}
-                    </span>
+              <li key={item.chatMessageId} className="group flex items-start gap-2 px-4 py-3 text-sm hover:bg-muted">
+                <Link href={hrefFor(item)} className="flex min-w-0 flex-1 items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-medium group-hover:underline">{senderName}</span>
+                      {item.channelTitle && (
+                        <span className="text-xs text-muted-foreground">in #{item.channelTitle}</span>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(item.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 truncate text-muted-foreground">{item.content}</p>
                   </div>
-                  <p className="mt-0.5 truncate text-muted-foreground">{item.content}</p>
+                  <ChevronRight className="mt-0.5 size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                 </Link>
                 <Button
                   variant="ghost"

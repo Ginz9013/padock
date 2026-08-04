@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Star, MessageSquareQuote } from "lucide-react";
 
 import { trpc } from "@/lib/trpc";
@@ -84,6 +85,9 @@ export function ChatThread({
   onFocusInput?: () => void;
 }) {
   const { data: session } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const messageIdParam = searchParams.get("messageId");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Keyed by chatMessageId — populated by mention.resolve, whose
   // per-viewer permission filtering (§5.1.20) is why this can't ride
@@ -102,6 +106,12 @@ export function ChatThread({
   // The message currently selected via the "Quote" hover action, shown
   // as a preview above the composer until sent or cancelled.
   const [composingQuote, setComposingQuote] = useState<QuotedMessagePreview | null>(null);
+  // ?messageId= deep link (from /bookmarks) — scrolls to and briefly
+  // highlights the target message instead of the default scroll-to-latest,
+  // same query-param pattern as the Project page's ?taskId= deep link.
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const consumedMessageIdParam = useRef(false);
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const targetKey = target.kind === "channel" ? target.channelId : target.withUserId;
@@ -154,8 +164,35 @@ export function ChatThread({
   }, []);
 
   useEffect(() => {
+    // A pending ?messageId= deep link takes over the initial scroll —
+    // the effect below handles it once the target message is in the DOM.
+    // Deliberately reads messageIdParam without listing it as a dep: the
+    // deep-link effect strips it from the URL once consumed, and that
+    // change alone must NOT re-run this effect — doing so would scroll
+    // back to the bottom and undo the deep-link scroll it just performed.
+    if (messageIdParam && !consumedMessageIdParam.current) return;
     bottomRef.current?.scrollIntoView({ block: "end" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length]);
+
+  useEffect(() => {
+    if (!messageIdParam || consumedMessageIdParam.current) return;
+    if (!messages.some((m) => m.id === messageIdParam)) return;
+    consumedMessageIdParam.current = true;
+    messageRefs.current.get(messageIdParam)?.scrollIntoView({ block: "center" });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHighlightedMessageId(messageIdParam);
+    const params = new URLSearchParams(searchParams);
+    params.delete("messageId");
+    router.replace(params.size > 0 ? `?${params.toString()}` : "?");
+    const timeout = setTimeout(() => setHighlightedMessageId(null), 2000);
+    return () => clearTimeout(timeout);
+    // messageIdParam deliberately excluded — router.replace above strips
+    // it moments after this runs, and re-running on THAT change would
+    // fire this effect's cleanup (cancelling the still-pending timeout
+    // above) before it ever gets to clear the highlight.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
 
   // Live-append messages pushed via apps/realtime instead of waiting
   // for the next manual refresh (CONTEXT.md §5.1.4's ws+Redis seam —
@@ -313,9 +350,14 @@ export function ChatThread({
             return (
               <div
                 key={message.id}
+                ref={(el) => {
+                  if (el) messageRefs.current.set(message.id, el);
+                  else messageRefs.current.delete(message.id);
+                }}
                 className={cn(
-                  "group relative flex w-full items-start gap-2.5 rounded-md px-3 py-1.5 hover:bg-muted/40",
+                  "group relative flex w-full items-start gap-2.5 rounded-md px-3 py-1.5 transition-colors hover:bg-muted/40",
                   !grouped && index !== 0 && "mt-2",
+                  highlightedMessageId === message.id && "bg-amber-500/15 hover:bg-amber-500/15",
                 )}
               >
                 {grouped ? (
