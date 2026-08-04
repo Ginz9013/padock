@@ -2,23 +2,54 @@ import { z } from "zod";
 import { scopedProcedure, router } from "../trpc.ts";
 import { publishEvent } from "../redis.ts";
 import { runOrQueue } from "../approvalGate.ts";
-import { assertProjectMember } from "../projectAccess.ts";
+import { assertProjectMember, listMemberProjectIds } from "../projectAccess.ts";
 import { notify } from "../notify.ts";
 import { parseMentions } from "../mentions.ts";
+import { TRPCError } from "@trpc/server";
 
 // DM (recipientId) or channel message (channelId) — never both.
 // §5.1.3/Phase 4, single-level channel per ADR-0001. `projectId` is an
 // optional tag on DMs only (§5.1.2); channel messages get project
-// context from the channel.
+// context from the channel. `quotedMessageId` (§5.1.23) is same-thread
+// only — validated against whichever branch this input takes, below.
 const dmInput = z.object({
   recipientId: z.string(),
   content: z.string().min(1),
   projectId: z.string().optional(),
+  quotedMessageId: z.string().optional(),
 });
 const channelInput = z.object({
   channelId: z.string(),
   content: z.string().min(1),
+  quotedMessageId: z.string().optional(),
 });
+
+// §5.1.23: a quote must reference a message in the exact same
+// conversation being sent to — a mismatch can only come from a
+// tampered/buggy client (the UI only ever offers "quote" on messages
+// already visible in the current thread), so this rejects the whole
+// send rather than silently dropping the quote the way an invalid
+// ChatMention token is filtered out.
+async function assertSameThread(
+  db: Parameters<typeof assertProjectMember>[0],
+  quotedMessageId: string,
+  input: { recipientId: string } | { channelId: string },
+  userId: string,
+) {
+  const quoted = await db.chatMessage.findUnique({ where: { id: quotedMessageId } });
+  if (!quoted) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Quoted message not found" });
+  }
+  const sameThread =
+    "recipientId" in input
+      ? quoted.recipientId !== null &&
+        ((quoted.senderId === userId && quoted.recipientId === input.recipientId) ||
+          (quoted.senderId === input.recipientId && quoted.recipientId === userId))
+      : quoted.channelId === input.channelId;
+  if (!sameThread) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Can only quote a message from the same conversation" });
+  }
+}
 
 export const chatRouter = router({
   send: scopedProcedure("chat", "write")
@@ -36,6 +67,10 @@ export const chatRouter = router({
           }
         }
 
+        if (input.quotedMessageId) {
+          await assertSameThread(ctx.db, input.quotedMessageId, input, ctx.user.id);
+        }
+
         const message =
           "recipientId" in input
             ? await ctx.db.chatMessage.create({
@@ -44,6 +79,7 @@ export const chatRouter = router({
                   recipientId: input.recipientId,
                   content: input.content,
                   projectId: input.projectId,
+                  quotedMessageId: input.quotedMessageId,
                 },
               })
             : await ctx.db.chatMessage.create({
@@ -51,6 +87,7 @@ export const chatRouter = router({
                   senderId: ctx.user.id,
                   channelId: input.channelId,
                   content: input.content,
+                  quotedMessageId: input.quotedMessageId,
                 },
               });
 
@@ -144,6 +181,69 @@ export const chatRouter = router({
       return ctx.db.chatMessage.findMany({
         where: { channelId: input.channelId },
         orderBy: { createdAt: "asc" },
+      });
+    }),
+
+  // Batch, read-time resolution of quoted messages (§5.1.23), parallel
+  // in shape to mention.resolve. Id-only reference, no content/sender
+  // snapshot taken at send time — resolved live here instead, so a
+  // rename or an access change is always reflected, never stale.
+  resolveQuotes: scopedProcedure("chat", "read")
+    .input(z.object({ messageIds: z.array(z.string()).min(1).max(200) }))
+    .query(async ({ ctx, input }) => {
+      const memberProjectIds = await listMemberProjectIds(ctx.db, ctx.user.id);
+      const memberSet = new Set(memberProjectIds);
+
+      // Authorization gate: only resolve quotes for messages the caller
+      // could already read via chat.history/conversation — same posture
+      // as mention.resolve, don't trust client-supplied messageIds blindly.
+      const quoting = await ctx.db.chatMessage.findMany({
+        where: {
+          id: { in: input.messageIds },
+          quotedMessageId: { not: null },
+          OR: [
+            { senderId: ctx.user.id },
+            { recipientId: ctx.user.id },
+            { channel: { projectId: null } },
+            { channel: { projectId: { in: memberProjectIds } } },
+          ],
+        },
+        select: { id: true, quotedMessageId: true },
+      });
+      if (quoting.length === 0) return [];
+
+      const quotedIds = quoting.map((m) => m.quotedMessageId!);
+      const quoted = await ctx.db.chatMessage.findMany({
+        where: { id: { in: quotedIds } },
+        select: {
+          id: true,
+          content: true,
+          senderId: true,
+          createdAt: true,
+          channelId: true,
+          channel: { select: { projectId: true } },
+        },
+      });
+      const quotedMap = new Map(quoted.map((m) => [m.id, m]));
+
+      return quoting.map((m) => {
+        const target = quotedMap.get(m.quotedMessageId!);
+        if (!target) {
+          return { chatMessageId: m.id, quotedMessageId: m.quotedMessageId!, content: null, senderId: null, createdAt: null, restricted: false };
+        }
+        // Same project-membership gate as the underlying message read
+        // (§5.1.13) — a viewer who has since lost access to the quoted
+        // message's project gets a restricted placeholder, the same
+        // rendering convention as §5.1.20's restricted #task/#doc chips.
+        const restricted = !!target.channel?.projectId && !memberSet.has(target.channel.projectId);
+        return {
+          chatMessageId: m.id,
+          quotedMessageId: target.id,
+          content: restricted ? null : target.content,
+          senderId: restricted ? null : target.senderId,
+          createdAt: restricted ? null : target.createdAt,
+          restricted,
+        };
       });
     }),
 

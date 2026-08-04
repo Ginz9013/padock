@@ -127,6 +127,9 @@ export function AppSidebar({ onClose }: { onClose?: () => void }) {
       </div>
 
       <div className="border-t px-2 py-2">
+        <SidebarLink href="/bookmarks" active={pathname === "/bookmarks"}>
+          Bookmarks
+        </SidebarLink>
         <SidebarLink href="/approvals" active={pathname === "/approvals"}>
           Approvals
         </SidebarLink>

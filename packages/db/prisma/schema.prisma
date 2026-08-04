@@ -38,6 +38,7 @@ model User {
   auditLogs               AuditLog[]
   notifications           Notification[]    @relation("NotificationRecipient")
   triggeredNotifications  Notification[]    @relation("NotificationActor")
+  bookmarks               ChatBookmark[]
 
   @@unique([email])
   @@map("user")
@@ -470,24 +471,34 @@ model Channel {
 // (channelId set) — never both. Enforced in the tRPC router, not the
 // schema (Prisma has no cross-column CHECK constraint DSL).
 model ChatMessage {
-  id            String         @id @default(cuid())
-  senderId      String
-  sender        User           @relation("ChatMessageSender", fields: [senderId], references: [id])
-  recipientId   String?
-  recipient     User?          @relation("ChatMessageRecipient", fields: [recipientId], references: [id])
-  channelId     String?
-  channel       Channel?       @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  projectId     String?
-  project       Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  content       String
-  createdAt     DateTime       @default(now())
-  notifications Notification[]
-  mentions      ChatMention[]
+  id              String         @id @default(cuid())
+  senderId        String
+  sender          User           @relation("ChatMessageSender", fields: [senderId], references: [id])
+  recipientId     String?
+  recipient       User?          @relation("ChatMessageRecipient", fields: [recipientId], references: [id])
+  channelId       String?
+  channel         Channel?       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  projectId       String?
+  project         Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  content         String
+  createdAt       DateTime       @default(now())
+  notifications   Notification[]
+  mentions        ChatMention[]
+  bookmarks       ChatBookmark[]
+  // Single-target, same-thread-only reference to an earlier message
+  // (§5.1.23) — id-only, resolved live by chat.resolveQuotes, never a
+  // content/sender snapshot. `chat.send` is the sole enforcement point
+  // for "same thread": a mismatched quotedMessageId rejects the whole
+  // send, the schema itself can't express that cross-column constraint.
+  quotedMessageId String?
+  quotedMessage   ChatMessage?   @relation("ChatMessageQuote", fields: [quotedMessageId], references: [id], onDelete: SetNull)
+  quotedBy        ChatMessage[]  @relation("ChatMessageQuote")
 
   @@index([senderId])
   @@index([recipientId])
   @@index([projectId])
   @@index([channelId])
+  @@index([quotedMessageId])
   @@map("chat_message")
 }
 
@@ -514,6 +525,26 @@ model ChatMention {
   @@index([chatMessageId])
   @@index([targetType, targetId])
   @@map("chat_mention")
+}
+
+// Private per-user "save this message for myself" marker (§5.1.22) —
+// not a shared/team-visible pin, so there is no signal here for anyone
+// but the bookmarking user. Mirrors ChatMention's join-table-over-blob
+// precedent, applied to a user-to-message relation instead of a
+// message-to-external-entity one. Deliberately not a generic
+// polymorphic bookmark (entityType/entityId): scoped to ChatMessage
+// only, same posture as Notification's per-trigger real FKs (§5.1.19).
+model ChatBookmark {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatMessageId String
+  chatMessage   ChatMessage @relation(fields: [chatMessageId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+
+  @@unique([userId, chatMessageId])
+  @@index([chatMessageId])
+  @@map("chat_bookmark")
 }
 
 enum ApprovalStatus {

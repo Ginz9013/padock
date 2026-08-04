@@ -5,6 +5,7 @@ import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
 import type { SuggestionOptions, SuggestionProps, SuggestionKeyDownProps } from "@tiptap/suggestion";
+import { X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -85,14 +86,27 @@ function makeSuggestionRender(getCrossProject?: () => boolean): SuggestionOption
   };
 }
 
+// A message picked via the message list's "Quote" hover action (§5.1.23)
+// — the composer only ever displays this, it doesn't fetch/resolve it.
+export type QuotedMessagePreview = { id: string; senderName: string; content: string };
+
 export type ChatComposerProps = {
   context: ConversationContext;
-  onSend: (content: string) => Promise<void>;
+  onSend: (content: string, quotedMessageId?: string) => Promise<void>;
   onFocus?: () => void;
   placeholder?: string;
+  quotedMessage?: QuotedMessagePreview | null;
+  onCancelQuote?: () => void;
 };
 
-export default function ChatComposer({ context, onSend, onFocus, placeholder }: ChatComposerProps) {
+export default function ChatComposer({
+  context,
+  onSend,
+  onFocus,
+  placeholder,
+  quotedMessage,
+  onCancelQuote,
+}: ChatComposerProps) {
   const [sending, setSending] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
   const [sendShortcutLabel, setSendShortcutLabel] = useState("Ctrl");
@@ -237,9 +251,10 @@ export default function ChatComposer({ context, onSend, onFocus, placeholder }: 
     if (!content) return;
     setSending(true);
     try {
-      await onSend(content);
+      await onSend(content, quotedMessage?.id);
       editor.commands.clearContent();
       setIsEmpty(true);
+      onCancelQuote?.();
     } finally {
       setSending(false);
     }
@@ -252,18 +267,37 @@ export default function ChatComposer({ context, onSend, onFocus, placeholder }: 
   });
 
   return (
-    <div className="flex items-end gap-2 border-t px-3 pt-3 pb-2">
-      <div className="relative min-h-9 flex-1 rounded-lg bg-muted">
-        {isEmpty && (
-          <p className="pointer-events-none absolute top-2 left-2.5 text-sm text-muted-foreground">
-            {placeholder ?? `Write a message… (${sendShortcutLabel}+Enter to send)`}
-          </p>
-        )}
-        <EditorContent editor={editor} className={cn("[&_.tiptap]:min-h-9")} />
+    <div className="border-t">
+      {quotedMessage && (
+        <div className="flex items-start gap-2 border-b bg-muted/40 px-3 py-2">
+          <div className="min-w-0 flex-1 border-l-2 pl-2 text-xs">
+            <p className="font-medium">{quotedMessage.senderName}</p>
+            <p className="truncate text-muted-foreground">{quotedMessage.content}</p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onCancelQuote}
+            aria-label="Cancel quote"
+            className="shrink-0"
+          >
+            <X className="size-3.5" />
+          </Button>
+        </div>
+      )}
+      <div className="flex items-end gap-2 px-3 pt-3 pb-2">
+        <div className="relative min-h-9 flex-1 rounded-lg bg-muted">
+          {isEmpty && (
+            <p className="pointer-events-none absolute top-2 left-2.5 text-sm text-muted-foreground">
+              {placeholder ?? `Write a message… (${sendShortcutLabel}+Enter to send)`}
+            </p>
+          )}
+          <EditorContent editor={editor} className={cn("[&_.tiptap]:min-h-9")} />
+        </div>
+        <Button onClick={handleSend} disabled={sending || isEmpty}>
+          Send
+        </Button>
       </div>
-      <Button onClick={handleSend} disabled={sending || isEmpty}>
-        Send
-      </Button>
     </div>
   );
 }
