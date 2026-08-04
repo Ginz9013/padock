@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 
-export type { ChatComposerProps } from "./chat-composer";
+export type { ChatComposerProps, QuotedMessagePreview } from "./chat-composer";
 
 // ssr: false is load-bearing — tiptap (ProseMirror underneath) touches
 // window/document on init, same crash risk under Next's SSR pass as
